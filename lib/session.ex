@@ -1,6 +1,6 @@
 defmodule ExOpcua.Session do
   use GenServer
-  alias ExOpcua.Protocol.{HelloHeader, OpenSecureChannelHeader, MSGHeader}
+  alias ExOpcua.Protocol.{HelloHeader, OpenSecureChannelHeader, MSGHeader, Headers}
   alias ExOpcua.Protocol
 
   @moduledoc """
@@ -20,20 +20,17 @@ defmodule ExOpcua.Session do
   def start_link(opts \\ []) do
     ip = opts[:ip] || "20.0.0.170"
     port = opts[:port] || 4840
-    url = opts[:url] || "opc.tcp://" <> ip <> ":" <> Integer.to_string(port)
+
+    url =
+      opts[:url] ||
+        "opc.tcp://" <> ip <> ":" <> Integer.to_string(port)
+
     handler = opts[:handler] || ExOpcua.Session.Handler
     GenServer.start_link(__MODULE__, [ip, port, url, handler], [])
   end
 
   @impl GenServer
   def init([ip, port, url, handler]) do
-    hello_message = Protocol.encode_message(:hello, %{url: url})
-
-    secure_connection_request =
-      Protocol.encode_message(:open_secure_channel, %{
-        sec_policy: "http://opcfoundation.org/UA/SecurityPolicy#None"
-      })
-
     with {:ok, socket} <-
            :gen_tcp.connect(
              ip |> String.to_charlist(),
@@ -41,21 +38,30 @@ defmodule ExOpcua.Session do
              [packet: :raw, mode: :binary, active: false, keepalive: true],
              10_000
            ),
-         :ok <- :gen_tcp.send(socket, hello_message),
-         {:ok, hello_ack} <- :gen_tcp.recv(socket, 0, 10_000),
-         {:ok, %{header: %HelloHeader{}}} <- Protocol.decode_recieved(hello_ack),
-         :ok <- :gen_tcp.send(socket, secure_connection_request),
-         {:ok, secure_connect_response} <- :gen_tcp.recv(socket, 0, 10_000),
+         {:ok, %{header: %HelloHeader{}}} <- initiate_hello(socket, url),
          {:ok,
           %{
-            header: %OpenSecureChannelHeader{
+            header:
+              %OpenSecureChannelHeader{
+                sender_cert: scert,
+                recv_cert: rcert
+              } = secure_channel_info,
+            payload: %{
               sec_channel_id: sci,
-              seq_number: seq_num,
-              req_id: req_id,
-              sender_cert: scert,
-              recv_cert: rcert
+              token_id: token_id,
+              revised_lifetime_in_ms: revised_lifetime_in_ms
             }
-          }} <- Protocol.decode_recieved(secure_connect_response) do
+          }} <- create_secure_connection(socket),
+         {:ok,
+          %{
+            payload: %{
+              session_id: _session_id,
+              auth_token: auth_token,
+              revised_session_timeout: _revised_session_timeout
+            }
+          }} <-
+           create_session(socket, sci, token_id, url),
+         {:ok, session} <- activate_session(socket, sci, token_id, auth_token) do
       :inet.setopts(socket, active: true)
 
       {:ok,
@@ -63,8 +69,8 @@ defmodule ExOpcua.Session do
          handler: handler,
          socket: socket,
          sec_channel_id: sci,
-         seq_number: seq_num,
-         req_id: req_id,
+         sec_token_id: token_id,
+         revised_lifetime_in_ms: revised_lifetime_in_ms,
          sender_cert: scert,
          recv_cert: rcert,
          url: url
@@ -74,11 +80,73 @@ defmodule ExOpcua.Session do
     end
   end
 
+  defp initiate_hello(socket, url) do
+    with hello_message <- Protocol.encode_message(:hello, %{url: url}),
+         :ok <- :gen_tcp.send(socket, hello_message),
+         {:ok, %{header: %HelloHeader{}} = decoded_ack} <-
+           Protocol.recieve_message(socket, nil, <<>>) do
+      {:ok, decoded_ack}
+    else
+      reason -> {:hello_error, reason}
+    end
+  end
+
+  defp create_secure_connection(socket) do
+    with secure_connection_request <-
+           Protocol.encode_message(:open_secure_channel, %{
+             sec_policy: "http://opcfoundation.org/UA/SecurityPolicy#None"
+           }),
+         :ok <- :gen_tcp.send(socket, secure_connection_request),
+         {:ok,
+          %{
+            header: %OpenSecureChannelHeader{
+              sec_channel_id: sci,
+              req_id: req_id,
+              sender_cert: scert,
+              recv_cert: rcert
+            }
+          } = decoded_ack} <- Protocol.recieve_message(socket) do
+      {:ok, decoded_ack}
+    else
+      reason -> {:secure_connect_error, reason}
+    end
+  end
+
+  defp create_session(socket, sec_channel_id, token_id, url) do
+    with session_request <-
+           Protocol.encode_message(:open_session, %{
+             sec_channel_id: sec_channel_id,
+             token_id: token_id,
+             url: url
+           }),
+         :ok <- :gen_tcp.send(socket, session_request),
+         {:ok, session_response} <- Protocol.recieve_message(socket) do
+      {:ok, session_response}
+    else
+      reason -> {:session_error, reason}
+    end
+  end
+
+  defp activate_session(socket, sec_channel_id, token_id, auth_token) do
+    with session_request <-
+           Protocol.encode_message(:activate_session, %{
+             sec_channel_id: sec_channel_id,
+             token_id: token_id,
+             auth_token: auth_token
+           }),
+         :ok <- :gen_tcp.send(socket, session_request),
+         {:ok, session_response} <- Protocol.recieve_message(socket) do
+      {:ok, session_response}
+    else
+      reason -> {:session_error, reason}
+    end
+  end
+
   @impl GenServer
   def handle_info({:tcp, _socket, packet}, %{handler: handler} = state) do
     :ok =
       packet
-      |> Protocol.decode_recieved(packet)
+      |> Protocol.decode_recieved()
       |> handler.handle_payload()
 
     {:noreply, state}
@@ -98,16 +166,6 @@ defmodule ExOpcua.Session do
 
   # TODO: Just a garbage message for testing currently
   def handle_cast(:send, %{socket: socket, url: url} = s) do
-    message =
-      <<0x4D, 0x53, 0x47, 0x46, 0x67, 0x00, 0x00, 0x00, 0x6A, 0xA9, 0xCD, 0x22, 0x01, 0x00, 0x00,
-        0x00, 0x6E, 0x00, 0x00, 0x00, 0x6E, 0x00, 0x00, 0x00, 0x01, 0x00, 0x0F, 0x02, 0x02, 0x00,
-        0x00, 0x3B, 0xDA, 0x04, 0x22, 0x20, 0x26, 0xC7, 0x49, 0x0A, 0x48, 0xD7, 0x01, 0x6E, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x30, 0x75, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0xE8, 0x03, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0xC0, 0x2D, 0x02, 0x00,
-        0x00, 0x00, 0x00, 0x1F, 0x01, 0x00, 0x00, 0x00, 0x00, 0x3F, 0x00, 0x00, 0x00>>
-
-    :ok = :gen_tcp.send(socket, message)
     {:noreply, s}
   end
 end

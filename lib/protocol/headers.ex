@@ -1,5 +1,6 @@
 defmodule ExOpcua.Protocol.HelloHeader do
   defstruct [
+    :msg_size,
     :recieve_buffer_size,
     :send_buffer_size,
     :max_msg_size,
@@ -10,7 +11,9 @@ end
 
 defmodule ExOpcua.Protocol.OpenSecureChannelHeader do
   defstruct [
+    :msg_size,
     :sec_channel_id,
+    :sec_token_id,
     :policy_uri,
     :seq_number,
     :req_id,
@@ -21,6 +24,7 @@ end
 
 defmodule ExOpcua.Protocol.MSGHeader do
   defstruct [
+    :msg_size,
     :sec_channel_id,
     :policy_uri,
     :seq_number,
@@ -43,12 +47,13 @@ defmodule ExOpcua.Protocol.Headers do
           | {:error, atom()}
   def decode_message_header(
         :ack,
-        <<_chunk_type::bytes-size(1), _msg_size::bytes-size(4), _version::little-integer-size(32),
-          rec_buffer_size::little-integer-size(32), send_buffer_size::little-integer-size(32),
-          max_msg_size::little-integer-size(32), max_chunk_count::little-integer-size(32),
-          message::binary>>
+        <<_chunk_type::bytes-size(1), msg_size::little-integer-size(32),
+          _version::little-integer-size(32), rec_buffer_size::little-integer-size(32),
+          send_buffer_size::little-integer-size(32), max_msg_size::little-integer-size(32),
+          max_chunk_count::little-integer-size(32), message::binary>>
       ) do
     {%HelloHeader{
+       msg_size: msg_size,
        recieve_buffer_size: rec_buffer_size,
        send_buffer_size: send_buffer_size,
        max_msg_size: max_msg_size,
@@ -58,13 +63,14 @@ defmodule ExOpcua.Protocol.Headers do
 
   def decode_message_header(
         :open_secure_channel,
-        <<_chunk_type::bytes-size(1), _msg_size::bytes-size(4),
+        <<_chunk_type::bytes-size(1), msg_size::little-integer-size(32),
           sec_channel_id::little-integer-size(32), policy_uri_size::little-integer-size(32),
           policy_uri::bytes-size(policy_uri_size), sender_cert::bytes-size(4),
-          recv_cert::bytes-size(4), sec_seq_number::integer-size(4), sec_req_id::integer-size(4),
-          message::binary>>
+          recv_cert::bytes-size(4), sec_seq_number::integer-size(32),
+          sec_req_id::integer-size(32), message::binary>>
       ) do
     {%OpenSecureChannelHeader{
+       msg_size: msg_size,
        sec_channel_id: sec_channel_id,
        policy_uri: policy_uri,
        seq_number: sec_seq_number,
@@ -76,13 +82,12 @@ defmodule ExOpcua.Protocol.Headers do
 
   def decode_message_header(
         :message,
-        <<_chunk_type::bytes-size(1), _msg_size::bytes-size(4),
+        <<_chunk_type::bytes-size(1), msg_size::little-integer-size(32),
           sec_channel_id::little-integer-size(32), sec_token_id::little-integer-size(32),
-          sec_seq_number::integer-size(4), sec_req_id::integer-size(4), message::binary>>
+          sec_seq_number::integer-size(32), sec_req_id::integer-size(32), message::binary>>
       ) do
-    IO.puts(inspect(message))
-
     {%MSGHeader{
+       msg_size: msg_size,
        sec_channel_id: sec_channel_id,
        seq_number: sec_seq_number,
        sec_token_id: sec_token_id,
@@ -95,10 +100,11 @@ defmodule ExOpcua.Protocol.Headers do
         <<_chunk_type::bytes-size(1), _msg_size::little-integer-size(4),
           error_type::bytes-size(4), reason::binary>>
       ) do
+    IO.puts(inspect(%ErrHeader{error_type: error_type, reason: reason}))
     {%ErrHeader{error_type: error_type, reason: reason}, <<>>}
   end
 
-  def decode_message_header(_, _) do
+  def decode_message_header(_, thing) do
     {:error, :invalid_header}
   end
 end
