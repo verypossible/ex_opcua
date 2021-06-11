@@ -5,7 +5,7 @@ defmodule ExOpcua.Session.Handler do
 
       @impl true
       def handle_payload(decoded_payload) do
-        IO.puts(decoded_payload)
+        IO.puts(inspect(decoded_payload))
         :ok
       end
 
@@ -19,4 +19,8 @@ defmodule ExOpcua.Session.Handler do
   Any other response is met with restart of the connection.
   """
   @callback handle_payload(decoded_payload :: struct()) :: :ok
+  def handle_payload(decoded_payload) do
+    IO.puts(inspect(decoded_payload))
+    :ok
+  end
 end

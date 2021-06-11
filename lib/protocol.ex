@@ -12,10 +12,13 @@ defmodule ExOpcua.Protocol do
       :ack
 
   """
-  alias ExOpcua.Protocol.{Headers, Services, DataTypes}
-  # 0xFF 0xFF 0xFF 0xFF
-  @default_cert 4_294_967_295
+  require ExOpcua.DataTypes.BuiltInDataTypes.Macros
+  alias ExOpcua.DataTypes.BuiltInDataTypes
+  alias ExOpcua.Protocol.Headers
+  alias ExOpcua.Services
+
   @default_version 0
+  @frame_head_size 8
   @message_types [
     hello: "HEL",
     open_secure_channel: "OPN",
@@ -28,53 +31,42 @@ defmodule ExOpcua.Protocol do
     final_aborted: "A"
   ]
 
-  @spec recieve_message(pid(), integer() | nil, binary()) ::
+  @spec recieve_message(pid(), integer() | nil) ::
           {:ok, %{payload: any, header: struct()}} | {:error, atom()}
-  def recieve_message(socket, size \\ nil, message_acc \\ <<>>)
-
-  def recieve_message(socket, nil, <<>>) do
-    {:ok, <<msg_type::bytes-size(3), rest::binary>> = whole_message} =
-      :gen_tcp.recv(socket, 0, 10_000)
-
-    {%{msg_size: size}, _} =
-      msg_type
-      |> decode_message_type()
-      |> Headers.decode_message_header(rest)
-
-    recieve_message(socket, size, whole_message)
-  end
-
-  def recieve_message(socket, size, message_acc)
-      when is_integer(size) and byte_size(message_acc) < size do
-    {:ok, more_message} = :gen_tcp.recv(socket, 0, 10_000)
-
-    recieve_message(socket, size, message_acc <> more_message)
-  end
-
-  def recieve_message(_socket, size, message_acc)
-      when is_integer(size) do
-    decode_recieved(message_acc)
-  end
-
-  @spec decode_recieved(binary()) ::
-          {:ok, %{payload: any, header: struct()}} | {:error, atom()}
-  def decode_recieved(<<msg_type::bytes-size(3), rest::binary>>) do
-    msg_type
-    |> decode_message_type()
-    |> Headers.decode_message_header(rest)
+  def recieve_message(socket, request_id \\ nil) do
+    socket
+    |> recieve_frame(request_id)
     |> decode_message()
+  end
+
+  @spec recieve_frame(pid(), integer() | nil, binary()) :: {struct(), binary()}
+  defp recieve_frame(socket, request_id, message_acc \\ <<>>)
+
+  defp recieve_frame(socket, request_id, message_acc) do
+    with {:ok, <<_::bytes-size(4), msg_size::little-integer-size(32)>> = frame_info} <-
+           :gen_tcp.recv(socket, @frame_head_size),
+         {:ok, frame} <- :gen_tcp.recv(socket, msg_size - @frame_head_size, 10_000),
+         full_frame <- frame_info <> frame do
+      case Headers.decode_message_header(full_frame) do
+        {%{req_id: ^request_id, chunk_type: :intermediate}, rest} ->
+          recieve_frame(socket, request_id, message_acc <> rest)
+
+        {%{req_id: ^request_id, chunk_type: :final} = header, rest} ->
+          {header, message_acc <> rest}
+
+        {%{chunk_type: :final} = header, rest} when is_nil(request_id) ->
+          {header, rest}
+
+        {:error, :invalid_header} ->
+          :invalid_header
+      end
+    end
   end
 
   @spec encode_message(atom(), [any]) :: binary() | :error
   def encode_message(:hello, %{url: url}) do
-    url_size = byte_size(url)
     # messages without URL are 32 bytes
-    msg_size = 32 + url_size
-
-    <<
-      @message_types[:hello]::binary,
-      @is_final[:final]::binary,
-      msg_size::little-integer-size(32),
+    payload = <<
       @default_version::integer-size(32),
       # rec_buff_size
       147_456::little-integer-size(32),
@@ -84,107 +76,38 @@ defmodule ExOpcua.Protocol do
       4_194_240::little-integer-size(32),
       # max_chunk_count
       65535::little-integer-size(32),
-      url_size::little-integer-size(32),
-      url::binary
-    >>
-  end
-
-  def encode_message(:open_secure_channel, %{sec_policy: security_policy}) do
-    security_policy_size = byte_size(security_policy)
-    seq_number = 5
-
-    payload = <<
-      # channel_id
-      0::little-integer-size(32),
-      security_policy_size::little-integer-size(32),
-      security_policy::binary,
-      # sender cert
-      @default_cert::little-integer-size(32),
-      # reciever cert
-      @default_cert::little-integer-size(32),
-      # sequence number
-      seq_number::little-integer-size(32),
-      # request id
-      1::little-integer-size(32),
-      # request message
-      0x01,
-      0x00,
-      0xBE,
-      0x01,
-      0x00,
-      0x00,
-      0x00,
-      0x00,
-      0x00,
-      0x00,
-      0x00,
-      0x00,
-      0x00,
-      0x00,
-      0x00,
-      0x00,
-      0x00,
-      0x00,
-      0x00,
-      0x00,
-      0x00,
-      0x00,
-      0xFF,
-      0xFF,
-      0xFF,
-      0xFF,
-      0x00,
-      0x00,
-      0x00,
-      0x00,
-      0x00,
-      0x00,
-      0x00,
-      0x00,
-      0x00,
-      0x00,
-      0x00,
-      0x00,
-      0x00,
-      0x00,
-      0x00,
-      0x01,
-      0x00,
-      0x00,
-      0x00,
-      0x00,
-      0x00,
-      0x00,
-      0x00,
-      0x80,
-      0xEE,
-      0x36,
-      0x00
+      BuiltInDataTypes.Macros.serialize_string(url)
     >>
 
     msg_size = 8 + byte_size(payload)
 
-    <<
-      @message_types[:open_secure_channel]::binary,
-      @is_final[:final]::binary,
-      msg_size::little-integer-size(32)
-    >> <> payload
+    <<@message_types[:hello]::binary, @is_final[:final]::binary,
+      msg_size::little-integer-size(32)>> <> payload
+  end
+
+  def encode_message(:open_secure_channel, %{
+        sec_policy: security_policy,
+        seq_number: seq_number,
+        req_id: req_id
+      }) do
+    Services.OpenSecureChannel.encode_command(security_policy, seq_number, req_id)
   end
 
   def encode_message(:open_session, %{
         sec_channel_id: sec_channel_id,
         token_id: token_id,
+        req_id: req_id,
+        seq_number: seq_number,
         url: url
       }) do
     url = "opc.tcp://Kalebs-MacBook-Pro.local:53530/OPCUA/SimulationServer"
-    url_size = byte_size(url)
-    next_sequence_num = 6
 
     payload = <<
       sec_channel_id::little-integer-size(32),
       token_id::little-integer-size(32),
-      next_sequence_num::little-integer-size(32),
-      next_sequence_num::little-integer-size(32),
+      seq_number::little-integer-size(32),
+      # request_id
+      req_id::little-integer-size(32),
       0x01,
       0x00,
       461::little-integer-size(16),
@@ -192,7 +115,7 @@ defmodule ExOpcua.Protocol do
       0x00,
       0x00,
       # timestamp
-      DataTypes.datetime_to_timestamp(DateTime.utc_now())::little-integer-size(64),
+      BuiltInDataTypes.Timestamp.from_datetime(DateTime.utc_now())::little-integer-size(64),
       # request handle and diagnostics
       0::little-integer-size(64),
       # audit entry id
@@ -207,18 +130,15 @@ defmodule ExOpcua.Protocol do
       0x00,
       0x00,
       # product_description
-      42::little-integer-size(32),
-      "urn:Kalebs-MacBook-Pro.local:helios_nerves",
-      32::little-integer-size(32),
-      "urn:helios-app.com:helios_nerves",
+      BuiltInDataTypes.Macros.serialize_string("urn:Kalebs-MacBook-Pro.local:ex_opcua"),
+      BuiltInDataTypes.Macros.serialize_string("urn:helios-app.com:ex_opcua"),
       # localized name
       0x03,
       0x00,
       0x00,
       0x00,
       0x00,
-      13::little-integer-size(32),
-      "helios_nerves",
+      BuiltInDataTypes.Macros.serialize_string("ex_opcua"),
       # application type client
       1::little-integer-size(32),
       # additional null values 0xFF
@@ -235,13 +155,12 @@ defmodule ExOpcua.Protocol do
       0xFF,
       0xFF,
       # ServerURI
-      51::little-integer-size(32),
-      "urn:Kalebs-MacBook-Pro.local:OPCUA:SimulationServer",
-      url_size::little-integer-size(32),
-      url::binary,
+      BuiltInDataTypes.Macros.serialize_string(
+        "urn:Kalebs-MacBook-Pro.local:OPCUA:SimulationServer"
+      ),
+      BuiltInDataTypes.Macros.serialize_string(url),
       # session name
-      16::little-integer-size(32),
-      "Helios Session12",
+      BuiltInDataTypes.Macros.serialize_string("Helios Session12"),
       # client nonce
       32::little-integer-size(32),
       System.unique_integer()::little-integer-size(256),
@@ -267,22 +186,24 @@ defmodule ExOpcua.Protocol do
   def encode_message(:activate_session, %{
         sec_channel_id: sec_channel_id,
         token_id: token_id,
-        auth_token: auth_token
+        auth_token: auth_token,
+        req_id: req_id,
+        seq_number: seq_number
       }) do
-    next_sequence_num = 7
-
     payload = <<
       sec_channel_id::little-integer-size(32),
       token_id::little-integer-size(32),
-      next_sequence_num::little-integer-size(32),
-      next_sequence_num::little-integer-size(32),
+      seq_number::little-integer-size(32),
+      req_id::little-integer-size(32),
       0x01,
       0x00,
       467::little-integer-size(16),
       # request_header
       auth_token::binary,
       # timestamp
-      DataTypes.datetime_to_timestamp(DateTime.utc_now())::little-integer-size(64),
+      BuiltInDataTypes.Timestamp.from_datetime(DateTime.utc_now())::little-integer-size(
+        64
+      ),
       # request handle and diagnostics
       0::little-integer-size(64),
       # audit entry id
@@ -306,7 +227,10 @@ defmodule ExOpcua.Protocol do
       0xFF,
       0xFF,
       # empty array of certs
-      0::little-integer-size(32),
+      0xFF,
+      0xFF,
+      0xFF,
+      0xFF,
       # array of locales
       1::little-integer-size(32),
       2::little-integer-size(32),
@@ -321,19 +245,7 @@ defmodule ExOpcua.Protocol do
       0x00,
       0x00,
       0x00,
-      0x09,
-      0x00,
-      0x00,
-      0x00,
-      0x41,
-      0x6E,
-      0x6F,
-      0x6E,
-      0x79,
-      0x6D,
-      0x6F,
-      0x75,
-      0x73,
+      BuiltInDataTypes.Macros.serialize_string("anonymous"),
       # signature data
       0xFF,
       0xFF,
@@ -343,6 +255,74 @@ defmodule ExOpcua.Protocol do
       0xFF,
       0xFF,
       0xFF
+    >>
+
+    msg_size = 8 + byte_size(payload)
+
+    <<
+      @message_types[:message]::binary,
+      @is_final[:final]::binary,
+      msg_size::little-integer-size(32)
+    >> <> payload
+  end
+
+  def encode_message(
+        :browse_request,
+        %{
+          sec_channel_id: sec_channel_id,
+          token_id: token_id,
+          auth_token: auth_token,
+          seq_number: seq_number
+        }
+      ) do
+    next_sequence_num = seq_number + 1
+
+    payload = <<
+      sec_channel_id::little-integer-size(32),
+      token_id::little-integer-size(32),
+      next_sequence_num::little-integer-size(32),
+      next_sequence_num::little-integer-size(32),
+      0x01,
+      0x00,
+      527::little-integer-size(16),
+      # request_header
+      auth_token::binary,
+      # timestamp
+      BuiltInDataTypes.Timestamp.from_datetime(DateTime.utc_now())::little-integer-size(
+        64
+      ),
+      # request handle and diagnostics
+      0::little-integer-size(64),
+      # audit entry id
+      0xFF,
+      0xFF,
+      0xFF,
+      0xFF,
+      # timeout hint
+      0::little-integer-size(32),
+      # additional header
+      0x00,
+      0x00,
+      0x00,
+      # view description
+      0::size(14)-unit(8),
+      # requested max ref per node
+      1000::little-integer-size(32),
+      # nodes to browse array
+      # size
+      1::little-integer-size(32),
+      # browse description
+      0x00,
+      0x2D,
+      # browse direction (forward)
+      0::little-integer-size(32),
+      # reference node type (not specified)
+      0xFF::size(2)-unit(8),
+      # include subtypes
+      0x01,
+      # node class
+      0::little-integer-size(32),
+      63::little-integer-size(32)
     >>
 
     msg_size = 8 + byte_size(payload)
@@ -366,20 +346,18 @@ defmodule ExOpcua.Protocol do
 
   def decode_message({header, bin_message}) do
     case Services.decode(bin_message) do
-      {:ok, decoded_message} -> {:ok, %{header: header, payload: decoded_message}}
-      {:error, reason} -> {:error, reason}
-      _ -> {:error, :undefined_error}
+      {:ok, decoded_message} ->
+        {:ok, %{header: header, payload: decoded_message}}
+
+      {:error, reason} ->
+        {reason, header, bin_message}
+
+      _ ->
+        {:error, :undefined_error}
     end
   end
 
-  def decode_message(_) do
-    {:error, :invalid_input}
+  def decode_message(other) do
+    {:error, other}
   end
-
-  @spec decode_message_type(binary()) :: atom() | nil
-  def decode_message_type("ACK"), do: :ack
-  def decode_message_type("ERR"), do: :error_msg
-  def decode_message_type("OPN"), do: :open_secure_channel
-  def decode_message_type("MSG"), do: :message
-  def decode_message_type(_), do: nil
 end
