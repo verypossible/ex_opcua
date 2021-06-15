@@ -1,5 +1,5 @@
 defmodule ExOpcua.Services do
-  require ExOpcua.DataTypes.BuiltInDataTypes.Macros
+  import ExOpcua.DataTypes.BuiltInDataTypes.Macros
   alias ExOpcua.DataTypes.BuiltInDataTypes
   alias ExOpcua.Services.{OpenSecureChannel, CreateSession, ActivateSession}
 
@@ -19,12 +19,12 @@ defmodule ExOpcua.Services do
   def decode(
         <<
           _::bytes-size(2),
-          type::little-integer-size(16),
-          BuiltInDataTypes.Macros.deserialize_timestamp(timestamp),
-          _req_handle::little-integer-size(32),
-          0::little-integer-size(32),
+          type::int(16),
+          deserialize_timestamp(timestamp),
+          _req_handle::int(32),
+          0::int(32),
           _diagnostic_mask::bytes-size(1),
-          _string_table_size::little-integer-size(32),
+          _string_table_size::int(32),
           _additional_header::bytes-size(3),
           rest::binary
         >>,

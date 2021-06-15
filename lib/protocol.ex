@@ -12,8 +12,9 @@ defmodule ExOpcua.Protocol do
       :ack
 
   """
-  require ExOpcua.DataTypes.BuiltInDataTypes.Macros
+  import ExOpcua.DataTypes.BuiltInDataTypes.Macros
   alias ExOpcua.DataTypes.BuiltInDataTypes
+  alias ExOpcua.DataTypes.NodeId
   alias ExOpcua.Protocol.Headers
   alias ExOpcua.Services
 
@@ -32,7 +33,7 @@ defmodule ExOpcua.Protocol do
   ]
 
   @spec recieve_message(pid(), integer() | nil) ::
-          {:ok, %{payload: any, header: struct()}} | {:error, atom()}
+          {:ok, %{payload: any, header: struct()}} | atom()
   def recieve_message(socket, request_id \\ nil) do
     socket
     |> recieve_frame(request_id)
@@ -43,7 +44,7 @@ defmodule ExOpcua.Protocol do
   defp recieve_frame(socket, request_id, message_acc \\ <<>>)
 
   defp recieve_frame(socket, request_id, message_acc) do
-    with {:ok, <<_::bytes-size(4), msg_size::little-integer-size(32)>> = frame_info} <-
+    with {:ok, <<_::bytes-size(4), msg_size::int(32)>> = frame_info} <-
            :gen_tcp.recv(socket, @frame_head_size),
          {:ok, frame} <- :gen_tcp.recv(socket, msg_size - @frame_head_size, 10_000),
          full_frame <- frame_info <> frame do
@@ -57,8 +58,8 @@ defmodule ExOpcua.Protocol do
         {%{chunk_type: :final} = header, rest} when is_nil(request_id) ->
           {header, rest}
 
-        {:error, :invalid_header} ->
-          :invalid_header
+        {:error, reason} ->
+          reason
       end
     end
   end
@@ -69,20 +70,19 @@ defmodule ExOpcua.Protocol do
     payload = <<
       @default_version::integer-size(32),
       # rec_buff_size
-      147_456::little-integer-size(32),
+      147_456::int(32),
       # send_buff_size
-      147_456::little-integer-size(32),
+      147_456::int(32),
       # max_msg_size
-      4_194_240::little-integer-size(32),
+      4_194_240::int(32),
       # max_chunk_count
-      65535::little-integer-size(32),
-      BuiltInDataTypes.Macros.serialize_string(url)
+      65535::int(32),
+      serialize_string(url)
     >>
 
     msg_size = 8 + byte_size(payload)
 
-    <<@message_types[:hello]::binary, @is_final[:final]::binary,
-      msg_size::little-integer-size(32)>> <> payload
+    <<@message_types[:hello]::binary, @is_final[:final]::binary, msg_size::int(32)>> <> payload
   end
 
   def encode_message(:open_secure_channel, %{
@@ -103,75 +103,58 @@ defmodule ExOpcua.Protocol do
     url = "opc.tcp://Kalebs-MacBook-Pro.local:53530/OPCUA/SimulationServer"
 
     payload = <<
-      sec_channel_id::little-integer-size(32),
-      token_id::little-integer-size(32),
-      seq_number::little-integer-size(32),
+      sec_channel_id::int(32),
+      token_id::int(32),
+      seq_number::int(32),
       # request_id
-      req_id::little-integer-size(32),
+      req_id::int(32),
       0x01,
       0x00,
-      461::little-integer-size(16),
+      461::int(16),
       # request_header
       0x00,
       0x00,
       # timestamp
-      BuiltInDataTypes.Timestamp.from_datetime(DateTime.utc_now())::little-integer-size(64),
+      BuiltInDataTypes.Timestamp.from_datetime(DateTime.utc_now())::int(64),
       # request handle and diagnostics
-      0::little-integer-size(64),
+      0::int(64),
       # audit entry id
-      0xFF,
-      0xFF,
-      0xFF,
-      0xFF,
+      opc_null_value(),
       # timeout hint
-      0::little-integer-size(32),
+      0::int(32),
       # additional header
       0x00,
       0x00,
       0x00,
       # product_description
-      BuiltInDataTypes.Macros.serialize_string("urn:Kalebs-MacBook-Pro.local:ex_opcua"),
-      BuiltInDataTypes.Macros.serialize_string("urn:helios-app.com:ex_opcua"),
+      serialize_string("urn:Kalebs-MacBook-Pro.local:ex_opcua"),
+      serialize_string("urn:helios-app.com:ex_opcua"),
       # localized name
       0x03,
       0x00,
       0x00,
       0x00,
       0x00,
-      BuiltInDataTypes.Macros.serialize_string("ex_opcua"),
+      serialize_string("ex_opcua"),
       # application type client
-      1::little-integer-size(32),
+      1::int(32),
       # additional null values 0xFF
-      0xFF,
-      0xFF,
-      0xFF,
-      0xFF,
-      0xFF,
-      0xFF,
-      0xFF,
-      0xFF,
-      0xFF,
-      0xFF,
-      0xFF,
-      0xFF,
+      opc_null_value(),
+      opc_null_value(),
+      opc_null_value(),
       # ServerURI
-      BuiltInDataTypes.Macros.serialize_string(
-        "urn:Kalebs-MacBook-Pro.local:OPCUA:SimulationServer"
-      ),
-      BuiltInDataTypes.Macros.serialize_string(url),
+      serialize_string("urn:Kalebs-MacBook-Pro.local:OPCUA:SimulationServer"),
+      serialize_string(url),
       # session name
-      BuiltInDataTypes.Macros.serialize_string("Helios Session12"),
+      serialize_string("Helios Session12"),
       # client nonce
-      32::little-integer-size(32),
-      System.unique_integer()::little-integer-size(256),
+      32::int(32),
+      System.unique_integer()::int(256),
       # client cert
-      0xFF,
-      0xFF,
-      0xFF,
-      0xFF,
+      opc_null_value(),
       # requested keepalive
       300_000::little-float-size(64),
-      0::little-integer-size(32)
+      0::int(32)
     >>
 
     msg_size = 8 + byte_size(payload)
@@ -179,61 +162,50 @@ defmodule ExOpcua.Protocol do
     <<
       @message_types[:message]::binary,
       @is_final[:final]::binary,
-      msg_size::little-integer-size(32)
+      msg_size::int(32)
     >> <> payload
   end
 
-  def encode_message(:activate_session, %{
-        sec_channel_id: sec_channel_id,
-        token_id: token_id,
-        auth_token: auth_token,
-        req_id: req_id,
-        seq_number: seq_number
-      }) do
+  def encode_message(
+        :activate_session,
+        %{
+          sec_channel_id: sec_channel_id,
+          token_id: token_id,
+          auth_token: auth_token,
+          req_id: req_id,
+          seq_number: seq_number
+        }
+      ) do
     payload = <<
-      sec_channel_id::little-integer-size(32),
-      token_id::little-integer-size(32),
-      seq_number::little-integer-size(32),
-      req_id::little-integer-size(32),
+      sec_channel_id::int(32),
+      token_id::int(32),
+      seq_number::int(32),
+      req_id::int(32),
       0x01,
       0x00,
-      467::little-integer-size(16),
+      467::int(16),
       # request_header
-      auth_token::binary,
+      NodeId.serialize(auth_token)::binary,
       # timestamp
-      BuiltInDataTypes.Timestamp.from_datetime(DateTime.utc_now())::little-integer-size(
-        64
-      ),
+      BuiltInDataTypes.Timestamp.from_datetime(DateTime.utc_now())::int(64),
       # request handle and diagnostics
-      0::little-integer-size(64),
+      0::int(64),
       # audit entry id
-      0xFF,
-      0xFF,
-      0xFF,
-      0xFF,
+      opc_null_value(),
       # timeout hint
-      0::little-integer-size(32),
+      0::int(32),
       # additional header
       0x00,
       0x00,
       0x00,
       # client_signiture
-      0xFF,
-      0xFF,
-      0xFF,
-      0xFF,
-      0xFF,
-      0xFF,
-      0xFF,
-      0xFF,
+      opc_null_value(),
+      opc_null_value(),
       # empty array of certs
-      0xFF,
-      0xFF,
-      0xFF,
-      0xFF,
+      opc_null_value(),
       # array of locales
-      1::little-integer-size(32),
-      2::little-integer-size(32),
+      1::int(32),
+      2::int(32),
       "en",
       # client identity (ANONYMOUS)
       0x01,
@@ -245,16 +217,10 @@ defmodule ExOpcua.Protocol do
       0x00,
       0x00,
       0x00,
-      BuiltInDataTypes.Macros.serialize_string("anonymous"),
+      serialize_string("anonymous"),
       # signature data
-      0xFF,
-      0xFF,
-      0xFF,
-      0xFF,
-      0xFF,
-      0xFF,
-      0xFF,
-      0xFF
+      opc_null_value(),
+      opc_null_value()
     >>
 
     msg_size = 8 + byte_size(payload)
@@ -262,7 +228,7 @@ defmodule ExOpcua.Protocol do
     <<
       @message_types[:message]::binary,
       @is_final[:final]::binary,
-      msg_size::little-integer-size(32)
+      msg_size::int(32)
     >> <> payload
   end
 
@@ -278,28 +244,23 @@ defmodule ExOpcua.Protocol do
     next_sequence_num = seq_number + 1
 
     payload = <<
-      sec_channel_id::little-integer-size(32),
-      token_id::little-integer-size(32),
-      next_sequence_num::little-integer-size(32),
-      next_sequence_num::little-integer-size(32),
+      sec_channel_id::int(32),
+      token_id::int(32),
+      next_sequence_num::int(32),
+      next_sequence_num::int(32),
       0x01,
       0x00,
-      527::little-integer-size(16),
+      527::int(16),
       # request_header
       auth_token::binary,
       # timestamp
-      BuiltInDataTypes.Timestamp.from_datetime(DateTime.utc_now())::little-integer-size(
-        64
-      ),
+      BuiltInDataTypes.Timestamp.from_datetime(DateTime.utc_now())::int(64),
       # request handle and diagnostics
-      0::little-integer-size(64),
+      0::int(64),
       # audit entry id
-      0xFF,
-      0xFF,
-      0xFF,
-      0xFF,
+      opc_null_value(),
       # timeout hint
-      0::little-integer-size(32),
+      0::int(32),
       # additional header
       0x00,
       0x00,
@@ -307,22 +268,22 @@ defmodule ExOpcua.Protocol do
       # view description
       0::size(14)-unit(8),
       # requested max ref per node
-      1000::little-integer-size(32),
+      1000::int(32),
       # nodes to browse array
       # size
-      1::little-integer-size(32),
+      1::int(32),
       # browse description
       0x00,
       0x2D,
       # browse direction (forward)
-      0::little-integer-size(32),
+      0::int(32),
       # reference node type (not specified)
       0xFF::size(2)-unit(8),
       # include subtypes
       0x01,
       # node class
-      0::little-integer-size(32),
-      63::little-integer-size(32)
+      0::int(32),
+      63::int(32)
     >>
 
     msg_size = 8 + byte_size(payload)
@@ -330,7 +291,7 @@ defmodule ExOpcua.Protocol do
     <<
       @message_types[:message]::binary,
       @is_final[:final]::binary,
-      msg_size::little-integer-size(32)
+      msg_size::int(32)
     >> <> payload
   end
 

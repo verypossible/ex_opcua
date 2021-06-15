@@ -1,6 +1,5 @@
 defmodule ExOpcua.DataTypes.Array do
-  require ExOpcua.DataTypes.BuiltInDataTypes.Macros
-  alias ExOpcua.DataTypes.BuiltInDataTypes.Macros
+  import ExOpcua.DataTypes.BuiltInDataTypes.Macros
 
   @moduledoc """
       Module that contains array encoding and decoding functionality
@@ -19,9 +18,9 @@ defmodule ExOpcua.DataTypes.Array do
   """
   @spec take(binary(), function()) :: {list(), binary()}
   def take(<<>>, _), do: {[], <<>>}
-  def take(<<Macros.opc_null_value(), rest::binary>>, _), do: {[], rest}
+  def take(<<opc_null_value(), rest::binary>>, _), do: {[], rest}
 
-  def take(<<array_size::little-integer-size(32), rest::binary>>, decoder_callback) do
+  def take(<<array_size::int(32), rest::binary>>, decoder_callback) do
     do_take([], rest, decoder_callback, array_size)
   end
 

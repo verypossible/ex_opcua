@@ -1,16 +1,15 @@
 defmodule ExOpcua.Services.OpenSecureChannel do
-  require ExOpcua.DataTypes.BuiltInDataTypes.Macros
+  import ExOpcua.DataTypes.BuiltInDataTypes.Macros
   alias ExOpcua.DataTypes.BuiltInDataTypes
 
   @message_type "OPN"
   @is_final "F"
-  # 0xFF 0xFF 0xFF 0xFF
-  @default_cert 4_294_967_295
+  @default_cert opc_null_value()
 
   def decode_response(
-        <<_server_proto_ver::little-integer-size(32), sec_channel_id::little-integer-size(32),
-          token_id::little-integer-size(32), token_created_at::little-integer-size(64),
-          revised_lifetime_in_ms::little-integer-size(32), _nonce::binary>>
+        <<_server_proto_ver::int(32), sec_channel_id::int(32),
+          token_id::int(32), token_created_at::int(64),
+          revised_lifetime_in_ms::int(32), _nonce::binary>>
       ) do
     {:ok,
      %{
@@ -25,16 +24,16 @@ defmodule ExOpcua.Services.OpenSecureChannel do
   def encode_command(security_policy, seq_number, req_id) do
     payload = <<
       # channel_id
-      0::little-integer-size(32),
-      BuiltInDataTypes.Macros.serialize_string(security_policy),
+      0::int(32),
+      serialize_string(security_policy),
       # sender cert
-      @default_cert::little-integer-size(32),
+      @default_cert,
       # reciever cert
-      @default_cert::little-integer-size(32),
+      @default_cert,
       # sequence number
-      seq_number::little-integer-size(32),
+      seq_number::int(32),
       # request id
-      req_id::little-integer-size(32),
+      req_id::int(32),
       # request message
       0x01,
       0x00,
@@ -96,7 +95,7 @@ defmodule ExOpcua.Services.OpenSecureChannel do
     <<
       @message_type::binary,
       @is_final::binary,
-      msg_size::little-integer-size(32)
+      msg_size::int(32)
     >> <> payload
   end
 end

@@ -1,4 +1,6 @@
 defmodule ExOpcua.Protocol.Headers do
+  import ExOpcua.DataTypes.BuiltInDataTypes.Macros
+
   defmodule HelloHeader do
     defstruct [
       :msg_size,
@@ -53,10 +55,9 @@ defmodule ExOpcua.Protocol.Headers do
           {%MSGHeader{} | %OpenSecureChannelHeader{} | %HelloHeader{}, binary() | <<>>}
           | {:error, atom()}
   def decode_message_header(
-        <<"ACK"::binary, chunk_type::bytes-size(1), msg_size::little-integer-size(32),
-          _version::little-integer-size(32), rec_buffer_size::little-integer-size(32),
-          send_buffer_size::little-integer-size(32), max_msg_size::little-integer-size(32),
-          max_chunk_count::little-integer-size(32), message::binary>>
+        <<"ACK"::binary, chunk_type::bytes-size(1), msg_size::int(32), _version::int(32),
+          rec_buffer_size::int(32), send_buffer_size::int(32), max_msg_size::int(32),
+          max_chunk_count::int(32), message::binary>>
       ) do
     {%HelloHeader{
        msg_size: msg_size,
@@ -69,10 +70,9 @@ defmodule ExOpcua.Protocol.Headers do
   end
 
   def decode_message_header(
-        <<"OPN"::binary, chunk_type::bytes-size(1), msg_size::little-integer-size(32),
-          sec_channel_id::little-integer-size(32), policy_uri_size::little-integer-size(32),
-          policy_uri::bytes-size(policy_uri_size), sender_cert::bytes-size(4),
-          recv_cert::bytes-size(4), sec_seq_number::integer-size(32),
+        <<"OPN"::binary, chunk_type::bytes-size(1), msg_size::int(32), sec_channel_id::int(32),
+          policy_uri_size::int(32), policy_uri::bytes-size(policy_uri_size),
+          sender_cert::bytes-size(4), recv_cert::bytes-size(4), sec_seq_number::integer-size(32),
           sec_req_id::little-unsigned-integer-size(32), message::binary>>
       ) do
     {%OpenSecureChannelHeader{
@@ -88,9 +88,8 @@ defmodule ExOpcua.Protocol.Headers do
   end
 
   def decode_message_header(
-        <<"MSG"::binary, chunk_type::bytes-size(1), msg_size::little-integer-size(32),
-          sec_channel_id::little-integer-size(32), sec_token_id::little-integer-size(32),
-          sec_seq_number::little-unsigned-integer-size(32),
+        <<"MSG"::binary, chunk_type::bytes-size(1), msg_size::int(32), sec_channel_id::int(32),
+          sec_token_id::int(32), sec_seq_number::little-unsigned-integer-size(32),
           sec_req_id::little-unsigned-integer-size(32), message::binary>>
       ) do
     {%MSGHeader{
@@ -104,7 +103,7 @@ defmodule ExOpcua.Protocol.Headers do
   end
 
   def decode_message_header(
-        <<"ERR"::binary, _chunk_type::bytes-size(1), _msg_size::little-integer-size(32),
+        <<"ERR"::binary, _chunk_type::bytes-size(1), _msg_size::int(32),
           error_type::bytes-size(4), reason::binary>>
       ) do
     {%ErrHeader{error_type: error_type, reason: reason}, <<>>}

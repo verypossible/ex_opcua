@@ -56,7 +56,7 @@ defmodule ExOpcua.Session do
            :gen_tcp.connect(
              ip |> String.to_charlist(),
              port,
-             [packet: :raw, buffer: 5000, mode: :binary, active: false, keepalive: true],
+             [packet: :raw, mode: :binary, active: false, keepalive: true],
              10_000
            ),
          state <- %{state | socket: socket},

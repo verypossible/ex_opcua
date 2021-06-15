@@ -21,14 +21,4 @@ defmodule ExOpcua do
   def send(pid) do
     GenServer.cast(pid, :send)
   end
-
-  def test_function do
-    IO.puts("WOWZA")
-  end
-
-  defmacro test_macro do
-    quote do
-
-    end
-  end
 end
