@@ -6,6 +6,6 @@ defmodule ExOpcua.Services.ActivateSession do
         # diagnostics and such
         _rest::binary
       >>) do
-    :ok
+    {:ok, %{activated: true}}
   end
 end

@@ -25,14 +25,6 @@ defmodule ExOpcua.ParameterTypes.UserTokenPolicy do
 
   @token_types [:anonymous, :username, :cert_x509, :issued_token]
 
-  # @doc """
-  # 	Takes in a User Identity Token and returns the OPCUA binary representation.
-  # """
-
-  # @spec encode(any()) :: binary()
-  # def encode() do
-  # end
-
   @doc """
   	Takes in a binary beginning with an User Identity Token
   	Returns a tuple of the User Identity Token and remaining binary

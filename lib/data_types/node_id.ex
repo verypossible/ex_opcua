@@ -51,6 +51,12 @@ defmodule ExOpcua.DataTypes.NodeId do
 
   def take(other_binary), do: {nil, other_binary}
 
+  @doc """
+    Takes a map of values (Based on the Struct)
+    returns an OPCUA binary encoding
+    of the structure.
+  """
+  @spec serialize(map()) :: binary()
   def serialize(%{encoding_mask: 0, identifier: id}), do: <<0::int(8), id::int(8)>>
 
   def serialize(%{encoding_mask: 1, namespace_idx: idx, identifier: id}) do
@@ -70,8 +76,7 @@ defmodule ExOpcua.DataTypes.NodeId do
     <<mask::int(8), idx::int(16), serialize_string(id)>>
   end
 
-  def serialize(thing) do
-    IO.inspect(thing)
-    :not_implemented
+  def serialize(_) do
+    opc_null_value()
   end
 end

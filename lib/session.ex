@@ -96,6 +96,8 @@ defmodule ExOpcua.Session do
   # TODO: Just a garbage message for testing currently
   def handle_cast(:send, %{socket: socket, url: url} = s) do
     :gen_tcp.send(socket, Protocol.encode_message(:browse_request, s))
+    result = Protocol.recieve_message(socket)
+    IO.inspect(result)
     {:noreply, s}
   end
 
@@ -208,7 +210,7 @@ defmodule ExOpcua.Session do
              seq_number: seq_number
            }),
          :ok <- :gen_tcp.send(socket, session_request),
-         {:ok, %{payload: :activated}} <- Protocol.recieve_message(socket) do
+         {:ok, %{payload: %{activated: true}}} <- Protocol.recieve_message(socket) do
       IO.puts("Session Activated")
       {:ok, %{state | req_id: req_id, seq_number: seq_number}}
     else

@@ -32,21 +32,15 @@ defmodule ExOpcua.ParameterTypes.EndpointDescription do
         }
 
   @security_modes [:invalid, :none, :sign, :sign_and_encrypt]
-  # @doc """
-  # 	Takes in an endpoint description and returns the OPCUA binary representation.
-  # """
-
-  # @spec encode(any()) :: binary()
-  # def encode() do
-  # end
 
   @doc """
   	Takes in a binary beginning with an Endpoint Description
   	Returns a tuple of the Endpoint Description and remaining binary
   """
   @spec take(binary()) :: {%__MODULE__{}, binary()} | {:error, binary()}
-  def take(<<deserialize_string(endpoint_url), rest::binary>>) do
-    with {server, rest} <- ApplicationDescription.take(rest),
+  def take(binary) do
+    with {endpoint_url, rest} <- OpcString.take(binary),
+         {server, rest} <- ApplicationDescription.take(rest),
          {server_cert, rest} <- OpcString.take(rest),
          {message_sec_mode, rest} <- take_sec_mode(rest),
          {sec_policy_uri, rest} <- OpcString.take(rest),

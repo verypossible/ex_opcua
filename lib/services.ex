@@ -1,7 +1,15 @@
 defmodule ExOpcua.Services do
   import ExOpcua.DataTypes.BuiltInDataTypes.Macros
   alias ExOpcua.DataTypes.BuiltInDataTypes
-  alias ExOpcua.Services.{OpenSecureChannel, CreateSession, ActivateSession}
+  alias ExOpcua.Services.{ActivateSession, Browse, CreateSession, OpenSecureChannel}
+  alias ExOpcua.ParameterTypes.StatusCode
+
+  @service_ids %{
+    449 => OpenSecureChannel,
+    464 => CreateSession,
+    470 => ActivateSession,
+    530 => Browse
+  }
 
   @spec decode(binary()) ::
           {:ok, any()}
@@ -22,7 +30,7 @@ defmodule ExOpcua.Services do
           type::int(16),
           deserialize_timestamp(timestamp),
           _req_handle::int(32),
-          0::int(32),
+          status_code::uint(32),
           _diagnostic_mask::bytes-size(1),
           _string_table_size::int(32),
           _additional_header::bytes-size(3),
@@ -31,28 +39,20 @@ defmodule ExOpcua.Services do
         nil,
         %{}
       ) do
-    decode(rest, type, %{timestamp: BuiltInDataTypes.Timestamp.to_datetime(timestamp)})
+    status_code = StatusCode.decode(status_code)
+
+    decode(rest, type, %{
+      service_status: status_code,
+      timestamp: BuiltInDataTypes.Timestamp.to_datetime(timestamp)
+    })
   end
 
-  # OpenSecureChannelResponse binary(449)
-  def decode(payload, 449, decoded_map) do
-    {:ok, response_map} = OpenSecureChannel.decode_response(payload)
-    {:ok, Map.merge(decoded_map, response_map)}
+  def decode(payload, service_index, decoded_map) when is_map_key(@service_ids, service_index) do
+    {:ok, response} = Map.get(@service_ids, service_index).decode_response(payload)
+    {:ok, Map.merge(decoded_map, response)}
   end
 
-  # CreateSessionResponse binary(464)
-  def decode(payload, 464, decoded_map) do
-    {:ok, response_map} = CreateSession.decode_response(payload)
-    {:ok, Map.merge(decoded_map, response_map)}
-  end
-
-  # ActivateSessionResponse binary(470)
-  def decode(payload, 470, _decoded_map) do
-    :ok = ActivateSession.decode_response(payload)
-    {:ok, :activated}
-  end
-
-  def decode(_any, type, _decoded_map) do
-    {:not_implemented, type}
+  def decode(_any, service_index, _decoded_map) do
+    {:error, "service not implemented #{inspect(service_index)}"}
   end
 end

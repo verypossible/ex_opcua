@@ -9,51 +9,46 @@ defmodule ExOpcua.ParameterTypes.ApplicationDescription do
   alias ExOpcua.DataTypes.Array
 
   defstruct [
-    :application_uri,
+    :app_uri,
     :product_uri,
-    :application_name,
-    :application_type,
+    :app_name,
+    :app_type,
     :gateway_server_uri,
     :discovery_profile_uri,
     :discovery_urls
   ]
 
   @type t :: %__MODULE__{
-          application_uri: String.t(),
+          app_uri: String.t(),
           product_uri: String.t(),
-          application_name: String.t(),
-          application_type: atom(),
+          app_name: String.t(),
+          app_type: atom(),
           gateway_server_uri: String.t(),
           discovery_profile_uri: String.t(),
           discovery_urls: [String.t()]
         }
 
-  @application_types [:server, :client, :client_and_server, :discovery_server]
-  # @doc """
-  # 	Takes in an application description and returns the OPCUA binary representation.
-  # """
-
-  # @spec encode(any()) :: binary()
-  # def encode() do
-  # end
+  @app_types [:server, :client, :client_and_server, :discovery_server]
 
   @doc """
   	Takes in a binary beginning with an Application Description
   	Returns a tuple of the Application Description and remaining binary
   """
   @spec take(binary()) :: {%__MODULE__{}, binary()} | {:error, binary()}
-  def take(<<deserialize_string(app_uri), deserialize_string(product_uri), rest::binary>>) do
-    with {application_name, rest} <- LocalizedText.take(rest),
-         {application_type, rest} <- take_application_type(rest),
+  def take(binary) when is_binary(binary) do
+    with {app_uri, rest} <- OpcString.take(binary),
+         {product_uri, rest} <- OpcString.take(rest),
+         {app_name, rest} <- LocalizedText.take(rest),
+         {app_type, rest} <- take_app_type(rest),
          {gateway_server_uri, rest} <- OpcString.take(rest),
          {discovery_profile_uri, rest} <- OpcString.take(rest),
          {discovery_urls, rest} <- Array.take(rest, &OpcString.take/1) do
       {
         %__MODULE__{
-          application_uri: app_uri,
+          app_uri: app_uri,
           product_uri: product_uri,
-          application_type: application_type,
-          application_name: application_name,
+          app_type: app_type,
+          app_name: app_name,
           gateway_server_uri: gateway_server_uri,
           discovery_profile_uri: discovery_profile_uri,
           discovery_urls: discovery_urls
@@ -63,7 +58,54 @@ defmodule ExOpcua.ParameterTypes.ApplicationDescription do
     end
   end
 
-  defp take_application_type(<<app_type::int(32), rest::binary>>) do
-    {Enum.at(@application_types, app_type), rest}
+  @doc """
+    Serialize function for converting an ApplicationDescription to OPCUA Binary representation
+
+    If no argument is given (or nil) this function returns the library defaults
+  """
+  @spec serialize(map() | nil) :: binary()
+  def serialize(application_description \\ nil)
+
+  def serialize(nil) do
+    <<
+      serialize_string("urn:ex_opcua:ex_opcua"),
+      serialize_string("urn:ex_opcua:ex_opcua"),
+      LocalizedText.serialize("ex_opcua")::binary,
+      # application type client
+      1::int(32),
+      # additional null values 0xFF
+      opc_null_value(),
+      opc_null_value(),
+      opc_null_value()
+    >>
+  end
+
+  def serialize(%{
+        app_uri: app_uri,
+        product_uri: p_uri,
+        app_name: name,
+        app_type: type,
+        gateway_server_uri: gs_uri,
+        discovery_profile_uri: dp_uri,
+        discovery_urls: d_urls
+      }) do
+    <<
+      OpcString.serialize(app_uri)::binary,
+      OpcString.serialize(p_uri)::binary,
+      LocalizedText.serialize(name)::binary,
+      # application type client
+      Enum.find_index(@app_types, &(&1 === type))::int(32),
+      OpcString.serialize(gs_uri)::binary,
+      OpcString.serialize(dp_uri)::binary,
+      Array.serialize(d_urls, &OpcString.serialize/1)::binary
+    >>
+  end
+
+  def serialize(_) do
+    opc_null_value()
+  end
+
+  defp take_app_type(<<app_type::int(32), rest::binary>>) do
+    {Enum.at(@app_types, app_type), rest}
   end
 end

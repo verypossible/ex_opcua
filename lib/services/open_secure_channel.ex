@@ -7,9 +7,8 @@ defmodule ExOpcua.Services.OpenSecureChannel do
   @default_cert opc_null_value()
 
   def decode_response(
-        <<_server_proto_ver::int(32), sec_channel_id::int(32),
-          token_id::int(32), token_created_at::int(64),
-          revised_lifetime_in_ms::int(32), _nonce::binary>>
+        <<_server_proto_ver::int(32), sec_channel_id::int(32), token_id::int(32),
+          token_created_at::int(64), revised_lifetime_in_ms::int(32), _nonce::binary>>
       ) do
     {:ok,
      %{

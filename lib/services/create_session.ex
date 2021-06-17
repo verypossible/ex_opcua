@@ -13,7 +13,7 @@ defmodule ExOpcua.Services.CreateSession do
          {endpoint_descriptions, rest} <- Array.take(rest, &EndpointDescription.take/1),
          {server_software_certs, rest} <- Array.take(rest, &SignedSoftwareCertificate.take/1),
          {_signature_algorithm, rest} <- OpcString.take(rest),
-         {_signature, rest} <- OpcString.take(rest) do
+         {_signature, _rest} <- OpcString.take(rest) do
       {
         :ok,
         %{
@@ -30,7 +30,7 @@ defmodule ExOpcua.Services.CreateSession do
     end
   end
 
-  defp take_revised_timeout(<<revised_session_timeout::little-float-size(64), rest::binary>>) do
+  defp take_revised_timeout(<<revised_session_timeout::ldouble, rest::binary>>) do
     {round(revised_session_timeout), rest}
   end
 end

@@ -15,6 +15,7 @@ defmodule ExOpcua.Protocol do
   import ExOpcua.DataTypes.BuiltInDataTypes.Macros
   alias ExOpcua.DataTypes.BuiltInDataTypes
   alias ExOpcua.DataTypes.NodeId
+  alias ExOpcua.ParameterTypes.ApplicationDescription
   alias ExOpcua.Protocol.Headers
   alias ExOpcua.Services
 
@@ -45,8 +46,8 @@ defmodule ExOpcua.Protocol do
 
   defp recieve_frame(socket, request_id, message_acc) do
     with {:ok, <<_::bytes-size(4), msg_size::int(32)>> = frame_info} <-
-           :gen_tcp.recv(socket, @frame_head_size),
-         {:ok, frame} <- :gen_tcp.recv(socket, msg_size - @frame_head_size, 10_000),
+           :gen_tcp.recv(socket, @frame_head_size, 10_000),
+         {:ok, frame} <- :gen_tcp.recv(socket, msg_size - @frame_head_size, 2_000),
          full_frame <- frame_info <> frame do
       case Headers.decode_message_header(full_frame) do
         {%{req_id: ^request_id, chunk_type: :intermediate}, rest} ->
@@ -127,21 +128,7 @@ defmodule ExOpcua.Protocol do
       0x00,
       0x00,
       # product_description
-      serialize_string("urn:Kalebs-MacBook-Pro.local:ex_opcua"),
-      serialize_string("urn:helios-app.com:ex_opcua"),
-      # localized name
-      0x03,
-      0x00,
-      0x00,
-      0x00,
-      0x00,
-      serialize_string("ex_opcua"),
-      # application type client
-      1::int(32),
-      # additional null values 0xFF
-      opc_null_value(),
-      opc_null_value(),
-      opc_null_value(),
+      ApplicationDescription.serialize()::binary,
       # ServerURI
       serialize_string("urn:Kalebs-MacBook-Pro.local:OPCUA:SimulationServer"),
       serialize_string(url),
@@ -252,7 +239,7 @@ defmodule ExOpcua.Protocol do
       0x00,
       527::int(16),
       # request_header
-      auth_token::binary,
+      NodeId.serialize(auth_token)::binary,
       # timestamp
       BuiltInDataTypes.Timestamp.from_datetime(DateTime.utc_now())::int(64),
       # request handle and diagnostics
