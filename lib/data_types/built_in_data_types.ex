@@ -152,10 +152,10 @@ defmodule ExOpcua.DataTypes.BuiltInDataTypes do
       0x03 - local and string info
     """
     @spec take(binary()) :: {String.t(), binary()} | {nil, binary()}
-    def take(<<0x01, deserialize_string(locale), rest::binary>>), do: {"", rest}
+    def take(<<0x01, deserialize_string(_locale), rest::binary>>), do: {"", rest}
     def take(<<0x02, deserialize_string(string), rest::binary>>), do: {string, rest}
 
-    def take(<<0x03, deserialize_string(locale), deserialize_string(string), rest::binary>>) do
+    def take(<<0x03, deserialize_string(_locale), deserialize_string(string), rest::binary>>) do
       {string, rest}
     end
 

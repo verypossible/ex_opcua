@@ -1,0 +1,3 @@
+%{
+  "expat": {:hex, :expat, "1.0.5", "994ff9872139038432241bc05957dc7ba114f87fa7ed362c6fea32cd98d7fb19", [:mix], [], "hexpm", "067901c4ccdab8ebe6825bdc954d68f6e4392d99a84986863c4ce07bd74a3824"},
+}

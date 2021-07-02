@@ -1,14 +1,15 @@
 defmodule ExOpcua.Services do
   import ExOpcua.DataTypes.BuiltInDataTypes.Macros
   alias ExOpcua.DataTypes.BuiltInDataTypes
-  alias ExOpcua.Services.{ActivateSession, Browse, CreateSession, OpenSecureChannel}
+  alias ExOpcua.Services.{ActivateSession, Browse, CreateSession, OpenSecureChannel, Read}
   alias ExOpcua.ParameterTypes.StatusCode
 
   @service_ids %{
     449 => OpenSecureChannel,
     464 => CreateSession,
     470 => ActivateSession,
-    530 => Browse
+    530 => Browse,
+    634 => Read
   }
 
   @spec decode(binary()) ::

@@ -1,5 +1,4 @@
 defmodule ExOpcua.Services.Browse do
-  import ExOpcua.DataTypes.BuiltInDataTypes.Macros
   alias ExOpcua.DataTypes.Array
   alias ExOpcua.ParameterTypes.BrowseResult
 

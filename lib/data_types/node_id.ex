@@ -41,6 +41,8 @@ defmodule ExOpcua.DataTypes.NodeId do
     {format_struct(mask, namespace_idx, identifier), rest}
   end
 
+  def take(other_binary), do: {nil, other_binary}
+
   defp format_struct(mask, namespace_idx, identifier) do
     %__MODULE__{
       encoding_mask: mask,
@@ -48,8 +50,6 @@ defmodule ExOpcua.DataTypes.NodeId do
       identifier: identifier
     }
   end
-
-  def take(other_binary), do: {nil, other_binary}
 
   @doc """
     Takes a map of values (Based on the Struct)

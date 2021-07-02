@@ -20,7 +20,7 @@ defmodule ExOpcua.DataTypes.Array do
   def take(<<>>, _), do: {[], <<>>}
   def take(<<opc_null_value(), rest::binary>>, _), do: {[], rest}
 
-  def take(<<array_size::int(32), rest::binary>> = bin, decoder_callback) do
+  def take(<<array_size::int(32), rest::binary>> = _bin, decoder_callback) do
     do_take([], rest, decoder_callback, array_size)
   end
 
@@ -29,7 +29,6 @@ defmodule ExOpcua.DataTypes.Array do
   end
 
   defp do_take(decoded_list, remaining_binary, decoder_callback, array_size) do
-    IO.inspect(array_size)
     {decoded_structure, rest} = decoder_callback.(remaining_binary)
 
     do_take([decoded_structure | decoded_list], rest, decoder_callback, array_size - 1)
