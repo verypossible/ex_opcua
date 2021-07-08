@@ -7,7 +7,7 @@ defmodule ExOpcua.DataTypes.BuiltInDataTypes do
     # Numeric Data Types.
     # Usage:
     #  <<255::uint(32)>>
-    defmacro int(size), do: quote(do: little - integer - size(unquote(size)))
+    defmacro int(size), do: quote(do: little - signed - integer - size(unquote(size)))
     defmacro uint(size), do: quote(do: little - unsigned - integer - size(unquote(size)))
     defmacro lfloat, do: quote(do: little - signed - float - 32)
     defmacro ldouble, do: quote(do: little - signed - float - 64)

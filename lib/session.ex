@@ -1,7 +1,7 @@
 defmodule ExOpcua.Session do
   use GenServer
-  alias ExOpcua.Protocol.Headers
   alias ExOpcua.Protocol
+  alias ExOpcua.Session.Impl
 
   defmodule State do
     defstruct [
@@ -60,10 +60,10 @@ defmodule ExOpcua.Session do
              10_000
            ),
          state <- %{state | socket: socket},
-         {:ok, state} <- initiate_hello(state),
-         {:ok, state} <- create_secure_connection(state),
-         {:ok, state} <- create_session(state),
-         {:ok, state} <- activate_session(state) do
+         {:ok, state} <- Impl.initiate_hello(state),
+         {:ok, state} <- Impl.create_secure_connection(state),
+         {:ok, state} <- Impl.create_session(state),
+         {:ok, state} <- Impl.activate_session(state) do
       # :inet.setopts(socket, active: true)
       {:ok, state}
     else
@@ -71,15 +71,15 @@ defmodule ExOpcua.Session do
     end
   end
 
-  @impl GenServer
-  def handle_info({:tcp, _socket, packet}, %{handler: handler} = state) do
-    # :ok =
-    #   packet
-    #   |> Protocol.decode_recieved()
-    #   |> handler.handle_payload()
+  # @impl GenServer
+  # def handle_info({:tcp, _socket, _packet}, %{handler: _handler} = state) do
+  #   # :ok =
+  #   #   packet
+  #   #   |> Protocol.decode_recieved()
+  #   #   |> handler.handle_payload()
 
-    {:noreply, state}
-  end
+  #   {:noreply, state}
+  # end
 
   @impl GenServer
   def handle_info({:tcp_closed, _socket}, state) do
@@ -94,127 +94,25 @@ defmodule ExOpcua.Session do
   end
 
   # TODO: Just a garbage message for testing currently
-  def handle_cast(:send, %{socket: socket, url: url} = s) do
+  @impl GenServer
+  def handle_cast(:send, %{socket: socket} = s) do
     :gen_tcp.send(socket, Protocol.encode_message(:browse_request, s))
     result = Protocol.recieve_message(socket)
     IO.inspect(result)
     {:noreply, s}
   end
 
-  defp initiate_hello(%{socket: socket, url: url} = state) do
-    with hello_message <- Protocol.encode_message(:hello, %{url: url}),
-         :ok <- :gen_tcp.send(socket, hello_message),
-         {:ok, %{header: %Headers.HelloHeader{}} = decoded_ack} <-
-           Protocol.recieve_message(socket) do
-      {:ok, state}
-    else
-      reason -> {:hello_error, reason}
-    end
+  @impl GenServer
+  def handle_call(:read, _from, %{socket: socket} = s) do
+    :gen_tcp.send(socket, Protocol.encode_message(:read_request, s))
+    result = Protocol.recieve_message(socket)
+    {:reply, result, s}
   end
 
-  defp create_secure_connection(%{socket: socket, req_id: req_id, seq_number: seq_number} = state) do
-    req_id = req_id + 1
-    seq_number = seq_number + 1
-
-    with secure_connection_request <-
-           Protocol.encode_message(:open_secure_channel, %{
-             sec_policy: "http://opcfoundation.org/UA/SecurityPolicy#None",
-             req_id: req_id,
-             seq_number: seq_number
-           }),
-         :ok <- :gen_tcp.send(socket, secure_connection_request),
-         {:ok,
-          %{
-            header: %Headers.OpenSecureChannelHeader{
-              sender_cert: scert,
-              recv_cert: rcert
-            },
-            payload: %{
-              sec_channel_id: sci,
-              token_id: token_id,
-              revised_lifetime_in_ms: revised_lifetime_in_ms
-            }
-          }} <- Protocol.recieve_message(socket) do
-      {:ok,
-       %{
-         state
-         | sec_channel_id: sci,
-           token_id: token_id,
-           req_id: req_id,
-           seq_number: seq_number,
-           sender_cert: scert,
-           recv_cert: rcert,
-           revised_lifetime_in_ms: revised_lifetime_in_ms
-       }}
-    else
-      reason -> {:secure_connect_error, reason}
-    end
-  end
-
-  defp create_session(
-         %{
-           socket: socket,
-           sec_channel_id: sec_channel_id,
-           req_id: req_id,
-           seq_number: seq_number,
-           token_id: token_id,
-           url: url
-         } = state
-       ) do
-    req_id = req_id + 1
-    seq_number = seq_number + 1
-
-    with session_request <-
-           Protocol.encode_message(:open_session, %{
-             sec_channel_id: sec_channel_id,
-             token_id: token_id,
-             url: url,
-             req_id: req_id,
-             seq_number: seq_number
-           }),
-         :ok <- :gen_tcp.send(socket, session_request),
-         {:ok,
-          %{
-            payload: %{
-              session_id: _session_id,
-              auth_token: auth_token,
-              revised_session_timeout: _revised_session_timeout
-            }
-          }} <- Protocol.recieve_message(socket, req_id) do
-      {:ok, %{state | auth_token: auth_token, req_id: req_id, seq_number: seq_number}}
-    else
-      reason -> {:session_error, reason}
-    end
-  end
-
-  defp activate_session(
-         %{
-           socket: socket,
-           auth_token: auth_token,
-           sec_channel_id: sec_channel_id,
-           req_id: req_id,
-           seq_number: seq_number,
-           token_id: token_id,
-           url: url
-         } = state
-       ) do
-    req_id = req_id + 1
-    seq_number = seq_number + 1
-
-    with session_request <-
-           Protocol.encode_message(:activate_session, %{
-             sec_channel_id: sec_channel_id,
-             token_id: token_id,
-             auth_token: auth_token,
-             req_id: req_id,
-             seq_number: seq_number
-           }),
-         :ok <- :gen_tcp.send(socket, session_request),
-         {:ok, %{payload: %{activated: true}}} <- Protocol.recieve_message(socket) do
-      IO.puts("Session Activated")
-      {:ok, %{state | req_id: req_id, seq_number: seq_number}}
-    else
-      reason -> {:activate_session_error, reason}
-    end
+  @impl GenServer
+  def handle_call({:read_all, node_id}, _from, %{socket: socket} = s) do
+    :gen_tcp.send(socket, Protocol.encode_message({:read_all_request, node_id}, s))
+    result = Protocol.recieve_message(socket)
+    {:reply, result, s}
   end
 end

@@ -43,7 +43,7 @@ defmodule ExOpcua.ParameterTypes.DataValue do
   end
 
   def parse_value({acc, <<rest::binary>>}, 1) do
-    {value, rest} = DataTypes.parse_types(rest)
+    {value, rest} = DataTypes.take_data_type(rest)
     {Map.put(acc, :value, value), rest}
   end
 

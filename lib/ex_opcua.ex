@@ -21,4 +21,12 @@ defmodule ExOpcua do
   def send(pid) do
     GenServer.cast(pid, :send)
   end
+
+  def read(pid) do
+    GenServer.call(pid, :read)
+  end
+
+  def read_all_attrs(node_id, pid) do
+    GenServer.call(pid, {:read_all, node_id})
+  end
 end

@@ -27,4 +27,12 @@ defmodule ExOpcua.DataTypes.QualifiedName do
 
     {%__MODULE__{id: id, name: name}, rest}
   end
+
+  def serialize(%{id: id, name: name}) when is_binary(name) do
+    <<id::int(16), OpcString.serialize(name)::binary>>
+  end
+
+  def serialize(_) do
+    <<0::int(16), opc_null_value()>>
+  end
 end

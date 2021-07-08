@@ -79,4 +79,32 @@ defmodule ExOpcua.DataTypes.NodeId do
   def serialize(_) do
     opc_null_value()
   end
+
+  def parse(string) when is_binary(string) do
+    string |> String.split(";") |> Enum.reduce(%__MODULE__{}, &do_parse/2)
+  end
+
+  defp do_parse("ns=" <> namespace_idx, %__MODULE__{} = nodeID) do
+    {namespace_idx, _} = Integer.parse(namespace_idx)
+    Map.put(nodeID, :namespace_idx, namespace_idx)
+  end
+
+  defp do_parse("i=" <> integer_identifier, %__MODULE__{} = nodeID) do
+    {identifier, _} = Integer.parse(integer_identifier)
+
+    nodeID
+    |> Map.put(:encoding_mask, 2)
+    |> Map.put(:identifier, identifier)
+  end
+
+  defp do_parse("s=" <> string_identifier, %__MODULE__{} = nodeID) do
+    nodeID
+    |> Map.put(:encoding_mask, 3)
+    |> Map.put(:identifier, string_identifier)
+  end
+
+  defp do_parse("g=" <> guid_identifier, %__MODULE__{} = nodeID) do
+    # TODO: Guids are 16 bytes, but currently there is no conversion from string representation
+    raise "Guid String Parsing not yet implemented"
+  end
 end
