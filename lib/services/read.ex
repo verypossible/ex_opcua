@@ -32,8 +32,6 @@ defmodule ExOpcua.Services.Read do
         auth_token: auth_token,
         seq_number: seq_number
       }) do
-    next_sequence_num = seq_number + 1
-
     read_values =
       1..27
       |> Enum.map(fn attr_id ->
@@ -46,8 +44,8 @@ defmodule ExOpcua.Services.Read do
     payload = <<
       sec_channel_id::int(32),
       token_id::int(32),
-      next_sequence_num::int(32),
-      next_sequence_num::int(32),
+      seq_number::int(32),
+      seq_number::int(32),
       0x01,
       0x00,
       631::int(16),
@@ -88,8 +86,6 @@ defmodule ExOpcua.Services.Read do
         seq_number: seq_number
       })
       when is_list(node_ids) do
-    next_sequence_num = seq_number + 1
-
     read_values =
       node_ids
       |> Enum.flat_map(fn node_id ->
@@ -110,8 +106,8 @@ defmodule ExOpcua.Services.Read do
     payload = <<
       sec_channel_id::int(32),
       token_id::int(32),
-      next_sequence_num::int(32),
-      next_sequence_num::int(32),
+      seq_number::int(32),
+      seq_number::int(32),
       0x01,
       0x00,
       631::int(16),

@@ -150,9 +150,9 @@ defmodule ExOpcua.Session.Impl do
       next_sequence_num = seq_number + 1
       %{s | seq_number: next_sequence_num}
     else
-      {:ok, s} = create_session(s)
-      {:ok, s} = activate_session(s)
       s
+      |> create_session()
+      |> activate_session()
     end
   end
 end

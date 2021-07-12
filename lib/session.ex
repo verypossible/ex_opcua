@@ -99,7 +99,7 @@ defmodule ExOpcua.Session do
   @impl GenServer
   def handle_call({:read_all, node_id}, _from, %{socket: socket} = s) do
     s = Impl.check_session(s)
-    :gen_tcp.send(socket, Protocol.encode_message({:read_all_request, node_id}, s))
+    :gen_tcp.send(socket, Services.Read.encode_read_all(node_id, s))
     {:ok, %{payload: result}} = Protocol.recieve_message(socket)
     {:reply, result, s}
   end

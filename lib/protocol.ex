@@ -228,13 +228,11 @@ defmodule ExOpcua.Protocol do
           seq_number: seq_number
         }
       ) do
-    next_sequence_num = seq_number + 1
-
     payload = <<
       sec_channel_id::int(32),
       token_id::int(32),
-      next_sequence_num::int(32),
-      next_sequence_num::int(32),
+      seq_number::int(32),
+      seq_number::int(32),
       0x01,
       0x00,
       527::int(16),
@@ -291,13 +289,11 @@ defmodule ExOpcua.Protocol do
           seq_number: seq_number
         }
       ) do
-    next_sequence_num = seq_number + 1
-
     payload = <<
       sec_channel_id::int(32),
       token_id::int(32),
-      next_sequence_num::int(32),
-      next_sequence_num::int(32),
+      seq_number::int(32),
+      seq_number::int(32),
       0x01,
       0x00,
       631::int(16),
