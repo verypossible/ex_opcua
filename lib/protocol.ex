@@ -15,7 +15,6 @@ defmodule ExOpcua.Protocol do
   import ExOpcua.DataTypes.BuiltInDataTypes.Macros
   alias ExOpcua.DataTypes.BuiltInDataTypes
   alias ExOpcua.DataTypes.NodeId
-  alias ExOpcua.ParameterTypes.ApplicationDescription
   alias ExOpcua.Protocol.Headers
   alias ExOpcua.Services
 
@@ -65,8 +64,7 @@ defmodule ExOpcua.Protocol do
     end
   end
 
-  @spec encode_message(atom(), [any]) :: binary() | :error
-  def encode_message(:hello, %{url: url}) do
+  def encode_hello_message(url) do
     # messages without URL are 32 bytes
     payload = <<
       @default_version::integer-size(32),
@@ -86,139 +84,7 @@ defmodule ExOpcua.Protocol do
     <<@message_types[:hello]::binary, @is_final[:final]::binary, msg_size::int(32)>> <> payload
   end
 
-  def encode_message(:open_secure_channel, %{
-        sec_policy: security_policy,
-        seq_number: seq_number,
-        req_id: req_id
-      }) do
-    Services.OpenSecureChannel.encode_command(security_policy, seq_number, req_id)
-  end
-
-  def encode_message(:open_session, %{
-        sec_channel_id: sec_channel_id,
-        token_id: token_id,
-        req_id: req_id,
-        seq_number: seq_number,
-        url: url
-      }) do
-    url = "opc.tcp://Kalebs-MacBook-Pro.local:53530/OPCUA/SimulationServer"
-
-    payload = <<
-      sec_channel_id::int(32),
-      token_id::int(32),
-      seq_number::int(32),
-      # request_id
-      req_id::int(32),
-      0x01,
-      0x00,
-      461::int(16),
-      # request_header
-      0x00,
-      0x00,
-      # timestamp
-      BuiltInDataTypes.Timestamp.from_datetime(DateTime.utc_now())::int(64),
-      # request handle and diagnostics
-      0::int(64),
-      # audit entry id
-      opc_null_value(),
-      # timeout hint
-      0::int(32),
-      # additional header
-      0x00,
-      0x00,
-      0x00,
-      # product_description
-      ApplicationDescription.serialize()::binary,
-      # ServerURI
-      serialize_string("urn:Kalebs-MacBook-Pro.local:OPCUA:SimulationServer"),
-      serialize_string(url),
-      # session name
-      serialize_string("Helios Session12"),
-      # client nonce
-      32::int(32),
-      System.unique_integer()::int(256),
-      # client cert
-      opc_null_value(),
-      # requested keepalive
-      300_000::little-float-size(64),
-      0::int(32)
-    >>
-
-    msg_size = 8 + byte_size(payload)
-
-    <<
-      @message_types[:message]::binary,
-      @is_final[:final]::binary,
-      msg_size::int(32)
-    >> <> payload
-  end
-
-  def encode_message(
-        :activate_session,
-        %{
-          sec_channel_id: sec_channel_id,
-          token_id: token_id,
-          auth_token: auth_token,
-          req_id: req_id,
-          seq_number: seq_number
-        }
-      ) do
-    payload = <<
-      sec_channel_id::int(32),
-      token_id::int(32),
-      seq_number::int(32),
-      req_id::int(32),
-      0x01,
-      0x00,
-      467::int(16),
-      # request_header
-      NodeId.serialize(auth_token)::binary,
-      # timestamp
-      BuiltInDataTypes.Timestamp.from_datetime(DateTime.utc_now())::int(64),
-      # request handle and diagnostics
-      0::int(64),
-      # audit entry id
-      opc_null_value(),
-      # timeout hint
-      0::int(32),
-      # additional header
-      0x00,
-      0x00,
-      0x00,
-      # client_signiture
-      opc_null_value(),
-      opc_null_value(),
-      # empty array of certs
-      opc_null_value(),
-      # array of locales
-      1::int(32),
-      2::int(32),
-      "en",
-      # client identity (ANONYMOUS)
-      0x01,
-      0x00,
-      0x41,
-      0x01,
-      0x01,
-      0x0D,
-      0x00,
-      0x00,
-      0x00,
-      serialize_string("anonymous"),
-      # signature data
-      opc_null_value(),
-      opc_null_value()
-    >>
-
-    msg_size = 8 + byte_size(payload)
-
-    <<
-      @message_types[:message]::binary,
-      @is_final[:final]::binary,
-      msg_size::int(32)
-    >> <> payload
-  end
-
+  @spec encode_message(atom(), [any]) :: binary() | :error
   def encode_message(
         :browse_request,
         %{
@@ -522,15 +388,21 @@ defmodule ExOpcua.Protocol do
     >> <> payload
   end
 
-  def encode_message(
-        {:read_all_request, node_id},
-        s
-      ) do
-    Services.Read.encode_read_all(node_id, s)
-  end
-
   def encode_message(_, _) do
     :not_implemented
+  end
+
+  @spec append_message_header(binary(), atom(), atom()) :: binary()
+  def append_message_header(payload, is_final \\ :final, message_type \\ :message)
+
+  def append_message_header(payload, is_final, message_type) when is_binary(payload) do
+    msg_size = @frame_head_size + byte_size(payload)
+
+    <<
+      @message_types[message_type]::binary,
+      @is_final[is_final]::binary,
+      msg_size::int(32)
+    >> <> payload
   end
 
   @spec decode_message({struct(), binary() | <<>>} | {:error, atom()}) ::

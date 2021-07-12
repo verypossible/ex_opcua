@@ -1,9 +1,8 @@
 defmodule ExOpcua.Services.OpenSecureChannel do
   import ExOpcua.DataTypes.BuiltInDataTypes.Macros
+  alias ExOpcua.Protocol
   alias ExOpcua.DataTypes.BuiltInDataTypes
 
-  @message_type "OPN"
-  @is_final "F"
   @default_cert opc_null_value()
 
   def decode_response(
@@ -21,7 +20,7 @@ defmodule ExOpcua.Services.OpenSecureChannel do
   end
 
   def encode_command(security_policy, seq_number, req_id) do
-    payload = <<
+    <<
       # channel_id
       0::int(32),
       serialize_string(security_policy),
@@ -88,13 +87,6 @@ defmodule ExOpcua.Services.OpenSecureChannel do
       0x36,
       0x00
     >>
-
-    msg_size = 8 + byte_size(payload)
-
-    <<
-      @message_type::binary,
-      @is_final::binary,
-      msg_size::int(32)
-    >> <> payload
+    |> Protocol.append_message_header(:final, :open_secure_channel)
   end
 end

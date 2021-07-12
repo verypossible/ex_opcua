@@ -1,6 +1,7 @@
 defmodule ExOpcua.Session.Impl do
   alias ExOpcua.Protocol.Headers
   alias ExOpcua.Protocol
+  alias ExOpcua.Services
 
   defmodule State do
     defstruct [
@@ -22,7 +23,7 @@ defmodule ExOpcua.Session.Impl do
   	Contains all the non-genserver implementation for ExOpcua Sessions
   """
   def initiate_hello(%State{socket: socket, url: url} = state) do
-    with hello_message <- Protocol.encode_message(:hello, %{url: url}),
+    with hello_message <- Protocol.encode_hello_message(url),
          :ok <- :gen_tcp.send(socket, hello_message),
          {:ok, %{header: %Headers.HelloHeader{}}} <-
            Protocol.recieve_message(socket) do
@@ -39,11 +40,11 @@ defmodule ExOpcua.Session.Impl do
     seq_number = seq_number + 1
 
     with secure_connection_request <-
-           Protocol.encode_message(:open_secure_channel, %{
-             sec_policy: "http://opcfoundation.org/UA/SecurityPolicy#None",
-             req_id: req_id,
-             seq_number: seq_number
-           }),
+           Services.OpenSecureChannel.encode_command(
+             "http://opcfoundation.org/UA/SecurityPolicy#None",
+             seq_number,
+             req_id
+           ),
          :ok <- :gen_tcp.send(socket, secure_connection_request),
          {:ok,
           %{
@@ -87,7 +88,7 @@ defmodule ExOpcua.Session.Impl do
     seq_number = seq_number + 1
 
     with session_request <-
-           Protocol.encode_message(:open_session, %{
+           Services.CreateSession.encode_command(%{
              sec_channel_id: sec_channel_id,
              token_id: token_id,
              url: url,
@@ -124,7 +125,7 @@ defmodule ExOpcua.Session.Impl do
     req_id = req_id + 1
 
     with session_request <-
-           Protocol.encode_message(:activate_session, %{
+           Services.ActivateSession.encode_command(%{
              sec_channel_id: sec_channel_id,
              token_id: token_id,
              auth_token: auth_token,
