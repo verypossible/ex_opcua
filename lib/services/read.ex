@@ -26,7 +26,7 @@ defmodule ExOpcua.Services.Read do
     }
   end
 
-  def encode_read_all(%NodeId{} = nodeId, %{
+  def encode_read_all(%NodeId{} = node_id, %{
         sec_channel_id: sec_channel_id,
         token_id: token_id,
         auth_token: auth_token,
@@ -38,9 +38,73 @@ defmodule ExOpcua.Services.Read do
       1..27
       |> Enum.map(fn attr_id ->
         %ReadValueId{
-          node_id: nodeId,
+          node_id: node_id,
           attribute_id: attr_id
         }
+      end)
+
+    payload = <<
+      sec_channel_id::int(32),
+      token_id::int(32),
+      next_sequence_num::int(32),
+      next_sequence_num::int(32),
+      0x01,
+      0x00,
+      631::int(16),
+      # request_header
+      NodeId.serialize(auth_token)::binary,
+      # timestamp
+      BuiltInDataTypes.Timestamp.from_datetime(DateTime.utc_now())::int(64),
+      # request handle and diagnostics
+      0::int(64),
+      # audit entry id
+      opc_null_value(),
+      # timeout hint
+      30000::int(32),
+      # additional header
+      0x00,
+      0x00,
+      0x00,
+      # max age
+      0::int(64),
+      # timestamps to return (none)
+      0::int(32),
+      Array.serialize(read_values, &ReadValueId.serialize/1)::binary
+    >>
+
+    msg_size = 8 + byte_size(payload)
+
+    <<
+      @message_types[:message]::binary,
+      @is_final[:final]::binary,
+      msg_size::int(32)
+    >> <> payload
+  end
+
+  def encode_read_values(node_ids, %{
+        sec_channel_id: sec_channel_id,
+        token_id: token_id,
+        auth_token: auth_token,
+        seq_number: seq_number
+      })
+      when is_list(node_ids) do
+    next_sequence_num = seq_number + 1
+
+    read_values =
+      node_ids
+      |> Enum.flat_map(fn node_id ->
+        [
+          # browse_name
+          %ReadValueId{
+            node_id: node_id,
+            attribute_id: 3
+          },
+          # value
+          %ReadValueId{
+            node_id: node_id,
+            attribute_id: 13
+          }
+        ]
       end)
 
     payload = <<

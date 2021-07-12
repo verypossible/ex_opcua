@@ -1,23 +1,8 @@
 defmodule ExOpcua.Session do
   use GenServer
   alias ExOpcua.Protocol
+  alias ExOpcua.Services
   alias ExOpcua.Session.Impl
-
-  defmodule State do
-    defstruct [
-      :handler,
-      :url,
-      :socket,
-      :sec_channel_id,
-      :token_id,
-      :sender_cert,
-      :recv_cert,
-      :revised_lifetime_in_ms,
-      :auth_token,
-      req_id: 0,
-      seq_number: 0
-    ]
-  end
 
   @moduledoc """
   Documentation for `ExOpcua`.
@@ -50,7 +35,7 @@ defmodule ExOpcua.Session do
     url = url <> "/OPCUA/SimulationServer"
 
     # initial values
-    state = %State{handler: handler, url: url}
+    state = %Impl.State{handler: handler, url: url}
 
     with {:ok, socket} <-
            :gen_tcp.connect(
@@ -59,11 +44,11 @@ defmodule ExOpcua.Session do
              [packet: :raw, mode: :binary, active: false, keepalive: true],
              10_000
            ),
-         state <- %{state | socket: socket},
-         {:ok, state} <- Impl.initiate_hello(state),
-         {:ok, state} <- Impl.create_secure_connection(state),
-         {:ok, state} <- Impl.create_session(state),
-         {:ok, state} <- Impl.activate_session(state) do
+         %Impl.State{} = state <- %{state | socket: socket},
+         %Impl.State{} = state <- Impl.initiate_hello(state),
+         %Impl.State{} = state <- Impl.create_secure_connection(state),
+         %Impl.State{} = state <- Impl.create_session(state),
+         %Impl.State{} = state <- Impl.activate_session(state) do
       # :inet.setopts(socket, active: true)
       {:ok, state}
     else
@@ -89,13 +74,14 @@ defmodule ExOpcua.Session do
 
   @impl GenServer
   def handle_info({:tcp_error, socket, reason}, state) do
-    IO.inspect(socket, label: "connection closed dut to #{reason}")
+    IO.inspect(socket, label: "connection closed due to #{reason}")
     {:noreply, state}
   end
 
   # TODO: Just a garbage message for testing currently
   @impl GenServer
   def handle_cast(:send, %{socket: socket} = s) do
+    s = Impl.check_session(s)
     :gen_tcp.send(socket, Protocol.encode_message(:browse_request, s))
     result = Protocol.recieve_message(socket)
     IO.inspect(result)
@@ -104,6 +90,7 @@ defmodule ExOpcua.Session do
 
   @impl GenServer
   def handle_call(:read, _from, %{socket: socket} = s) do
+    s = Impl.check_session(s)
     :gen_tcp.send(socket, Protocol.encode_message(:read_request, s))
     result = Protocol.recieve_message(socket)
     {:reply, result, s}
@@ -111,8 +98,17 @@ defmodule ExOpcua.Session do
 
   @impl GenServer
   def handle_call({:read_all, node_id}, _from, %{socket: socket} = s) do
+    s = Impl.check_session(s)
     :gen_tcp.send(socket, Protocol.encode_message({:read_all_request, node_id}, s))
-    result = Protocol.recieve_message(socket)
+    {:ok, %{payload: result}} = Protocol.recieve_message(socket)
+    {:reply, result, s}
+  end
+
+  @impl GenServer
+  def handle_call({:read_values, node_ids}, _from, %{socket: socket} = s) do
+    s = Impl.check_session(s)
+    :gen_tcp.send(socket, Services.Read.encode_read_values(node_ids, s))
+    {:ok, %{payload: result}} = Protocol.recieve_message(socket)
     {:reply, result, s}
   end
 end
