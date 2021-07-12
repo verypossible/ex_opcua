@@ -30,7 +30,7 @@ defmodule ExOpcua.Services.Read do
         }
       end)
 
-    payload = <<
+    <<
       sec_channel_id::int(32),
       token_id::int(32),
       seq_number::int(32),
@@ -58,14 +58,7 @@ defmodule ExOpcua.Services.Read do
       0::int(32),
       Array.serialize(read_values, &ReadValueId.serialize/1)::binary
     >>
-
-    msg_size = 8 + byte_size(payload)
-
-    <<
-      Protocol.message_types(:message)::binary,
-      Protocol.is_final(:final)::binary,
-      msg_size::int(32)
-    >> <> payload
+    |> Protocol.append_message_header()
   end
 
   def encode_read_values(node_ids, %{
