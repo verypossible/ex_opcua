@@ -8,7 +8,7 @@ defmodule ExOpcua.DataTypes do
     LocalizedText
   }
 
-  alias ExOpcua.DataTypes.{ExtensionObject, NodeId, QualifiedName}
+  alias ExOpcua.DataTypes.{Array, ExtensionObject, NodeId, QualifiedName}
 
   @doc """
     Takes a binary, and infers the datatype based on the first byte
@@ -16,10 +16,36 @@ defmodule ExOpcua.DataTypes do
   """
   @spec take_data_type(binary()) :: {any(), binary()}
   def take_data_type(<<type_byte, rest::binary>>) do
-    type_byte
-    |> infer_datatype()
-    |> take_data_type(rest)
+    inferred_type = infer_datatype(type_byte)
+
+    if inferred_type == type_byte do
+      take_variant(type_byte, rest)
+    else
+      take_data_type(inferred_type, rest)
+    end
   end
+
+  def take_variant(type_byte, rest) do
+    <<value_array::size(1)-unit(1), dimension_array::size(1)-unit(1), type::uint(6),
+      rest::binary>> = <<type_byte>> <> rest
+
+    # TODO: handle value_array, dimension_array, types
+    case {value_array, dimension_array} do
+      {1, 1} -> IO.inspect("value_array = True, dimension_array = True")
+      {1, 0} -> IO.inspect("value_array = True, dimension_array = False")
+      {0, 1} -> IO.inspect("value_array = False, dimension_array = True")
+      {0, 0} -> IO.inspect("value_array = False, dimension_array = False")
+    end
+
+    type_byte
+    |> infer_variant()
+    |> take_variant_type(rest)
+
+    # Array.take(rest, &take_data_type(infer_datatype(type_byte), &1))
+  end
+
+  defp take_variant_type(:ARRAY_OF_STRINGS, bin), do: Array.take(bin, &OpcString.take/1)
+  defp infer_variant(0x8C), do: :ARRAY_OF_STRINGS
 
   @doc """
     Takes an atom that represents which datatype to parse and a binary
@@ -83,6 +109,5 @@ defmodule ExOpcua.DataTypes do
   # 29 => UA_NS0ID_ENUMERATION
   # 30 => UA_NS0ID_IMAGE
 
-  defp infer_datatype(type_byte),
-    do: raise("Data Type: #{type_byte} not implemented")
+  defp infer_datatype(type), do: type
 end
