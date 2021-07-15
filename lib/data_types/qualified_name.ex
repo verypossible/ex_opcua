@@ -1,8 +1,8 @@
 defmodule ExOpcua.DataTypes.QualifiedName do
   @moduledoc """
   	Defines the structure template and decodings/encodings for
-  	the OPCUA Signed Software Certificate Parameter Type
-    https://reference.opcfoundation.org/v104/Core/DataTypes/SignedSoftwareCertificate/
+  	the OPCUA Qualified Name Data Type
+    https://reference.opcfoundation.org/v104/Core/DataTypes/QualifiedName/
   """
   alias ExOpcua.DataTypes.BuiltInDataTypes.OpcString
   import ExOpcua.DataTypes.BuiltInDataTypes.Macros

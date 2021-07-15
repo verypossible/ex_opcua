@@ -1,24 +1,43 @@
 defmodule ExOpcua.DataTypes.NumericRange do
   @moduledoc """
   	Defines the structure template and decodings/encodings for
-  	the OPCUA Signed Software Certificate Parameter Type
-    https://reference.opcfoundation.org/v104/Core/DataTypes/SignedSoftwareCertificate/
+  	the OPCUA Numeric Range Data Type
+    https://reference.opcfoundation.org/v104/Core/docs/Part4/7.22/
   """
   alias ExOpcua.DataTypes.BuiltInDataTypes.OpcString
 
   @type t :: Range.t()
 
-  @doc """
-  	Takes in a binary beginning with an User Identity Token
-  	Returns a tuple of the User Identity Token and remaining binary
-  """
   @spec take(binary()) :: {Range.t(), binary()}
   def take(binary) do
     with {range_data, rest} <- OpcString.take(binary) do
-      # Parse range_data
-      whatever = 1..8
+      range =
+        range_data
+        |> String.split(",")
+        |> range()
 
-      {whatever, rest}
+      {range, rest}
+    end
+  end
+
+  def range(ranges) when length(ranges) > 1 do
+    # Unclear how to implement “1:2,0:1”
+    raise "Multi-Range not implemented"
+  end
+
+  def range(range) when length(range) == 1 do
+    case String.contains?(range, ":") do
+      true ->
+        [min, max] = String.split(range, ":")
+
+        if min < max do
+          min..max
+        else
+          raise "Bad_IndexRangeNoData"
+        end
+
+      false ->
+        String.to_integer(range)
     end
   end
 end

@@ -1,22 +1,15 @@
 defmodule ExOpcua.DataTypes.ExtensionObject do
   @moduledoc """
   	Defines the structure template and decodings/encodings for
-  	the OPCUA Signed Software Certificate Parameter Type
-    https://reference.opcfoundation.org/v104/Core/DataTypes/SignedSoftwareCertificate/
+  	the OPCUA Extension Object
+    https://reference.opcfoundation.org/v104/Core/docs/Part6/5.1.5/
   """
   import ExOpcua.DataTypes.BuiltInDataTypes.Macros
   alias ExOpcua.DataTypes.{NodeId, ServerStatus}
-  # defstruct [:encoding_mask, :namespace_idx, :identifier]
 
   @data_types %{
     864 => ServerStatus
   }
-  # @type t :: %__MODULE__{
-  #         encoding_mask: byte(),
-  #         namespace_idx: integer(),
-  #         identifier: any()
-  #       }
-  # @spec take(binary()) :: {__MODULE__.t(), binary()}
   def take(<<opc_null_value(), rest::binary>>) do
     {nil, rest}
   end
