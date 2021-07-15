@@ -4,6 +4,8 @@ defmodule ExOpcua.Services.Read do
   alias ExOpcua.DataTypes.{Array, BuiltInDataTypes, NodeId}
   alias ExOpcua.ParameterTypes.{DataValue, ReadValueId}
 
+  # @attribute_ids []
+
   def decode_response(bin_response) when is_binary(bin_response) do
     {read_results, _} = Array.take(bin_response, &DataValue.take/1)
 
@@ -114,5 +116,26 @@ defmodule ExOpcua.Services.Read do
       Array.serialize(read_values, &ReadValueId.serialize/1)::binary
     >>
     |> Protocol.append_message_header()
+  end
+
+  def format_output(%{read_results: results}, node_ids, :pretty) do
+    formatted =
+      results
+      |> Enum.chunk_every(2)
+      |> Enum.map(&pair_to_kv/1)
+
+    node_ids
+    |> Enum.map(&NodeId.to_string/1)
+    |> Enum.zip(formatted)
+    |> Enum.into(%{})
+  end
+
+  def format_output(results, _node_ids, :raw), do: results
+
+  defp pair_to_kv([%{value: nil}, _]), do: {}
+
+  defp pair_to_kv([%{value: key}, %{value: value}]) do
+    key = Map.get(key, :name)
+    %{key => value}
   end
 end

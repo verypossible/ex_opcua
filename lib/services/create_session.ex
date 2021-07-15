@@ -38,8 +38,6 @@ defmodule ExOpcua.Services.CreateSession do
         seq_number: seq_number,
         url: url
       }) do
-    url = "opc.tcp://Kalebs-MacBook-Pro.local:53530/OPCUA/SimulationServer"
-
     <<
       sec_channel_id::int(32),
       token_id::int(32),
@@ -67,7 +65,7 @@ defmodule ExOpcua.Services.CreateSession do
       # product_description
       ApplicationDescription.serialize()::binary,
       # ServerURI
-      serialize_string("urn:Kalebs-MacBook-Pro.local:OPCUA:SimulationServer"),
+      serialize_string(String.replace(url, "/", ":")),
       serialize_string(url),
       # session name
       serialize_string("Helios Session12"),

@@ -80,6 +80,32 @@ defmodule ExOpcua.DataTypes.NodeId do
     opc_null_value()
   end
 
+  def to_string(%__MODULE__{
+        encoding_mask: 0,
+        namespace_idx: _namespace_idx,
+        identifier: identifier
+      }) do
+    "i=" <> Integer.to_string(identifier)
+  end
+
+  def to_string(%__MODULE__{
+        encoding_mask: mask,
+        namespace_idx: namespace_idx,
+        identifier: identifier
+      })
+      when mask in [1, 2] do
+    "ns=" <> Integer.to_string(namespace_idx) <> "i=" <> Integer.to_string(identifier)
+  end
+
+  def to_string(%__MODULE__{
+        encoding_mask: mask,
+        namespace_idx: namespace_idx,
+        identifier: identifier
+      })
+      when mask in [3, 5] do
+    "ns=" <> Integer.to_string(namespace_idx) <> "i=" <> identifier
+  end
+
   def parse(string) when is_binary(string) do
     string |> String.split(";") |> Enum.reduce(%__MODULE__{}, &do_parse/2)
   end
