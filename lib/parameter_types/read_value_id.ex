@@ -6,7 +6,7 @@ defmodule ExOpcua.ParameterTypes.ReadValueId do
   @type t :: %__MODULE__{
           node_id: NodeId.t(),
           attribute_id: integer(),
-          # index_range: NumericRange.t(), # TODO
+          index_range: NumericRange.t(),
           data_encoding: QualifiedName.t()
         }
 

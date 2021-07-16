@@ -42,26 +42,26 @@ defmodule ExOpcua.ParameterTypes.DataValue do
     |> parse_timestamp(has_server_picoseconds, :server_picoseconds)
   end
 
-  def parse_value({acc, <<rest::binary>>}, 1) do
+  defp parse_value({acc, <<rest::binary>>}, 1) do
     {value, rest} = DataTypes.take_data_type(rest)
     {Map.put(acc, :value, value), rest}
   end
 
-  def parse_value({acc, rest}, 0) do
+  defp parse_value({acc, rest}, 0) do
     {acc, rest}
   end
 
-  def parse_status_code({acc, rest}, 1) do
+  defp parse_status_code({acc, rest}, 1) do
     {status_code, rest} = StatusCode.take(rest)
     {Map.put(acc, :status_code, status_code.severity), rest}
   end
 
-  def parse_status_code({acc, rest}, 0), do: {acc, rest}
+  defp parse_status_code({acc, rest}, 0), do: {acc, rest}
 
-  def parse_timestamp({acc, <<ts::int(64), rest::binary>>}, 1, key) do
+  defp parse_timestamp({acc, <<ts::int(64), rest::binary>>}, 1, key) do
     timestamp = Timestamp.to_datetime(ts)
     {Map.put(acc, key, timestamp), rest}
   end
 
-  def parse_timestamp({acc, rest}, 0, _key), do: {acc, rest}
+  defp parse_timestamp({acc, rest}, 0, _key), do: {acc, rest}
 end

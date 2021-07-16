@@ -15,23 +15,16 @@ defmodule ExOpcua.DataTypes.ExtensionObject do
   end
 
   def take(bin) do
-    with {node, <<encoding_mask, rest::binary>>} <- NodeId.take(bin) do
+    with {node, <<1, rest::binary>>} <- NodeId.take(bin) do
       <<size::int(32), data::binary-size(size), rest::binary>> = rest
+      data_type = Map.get(@data_types, node.identifier, :not_implemented)
 
       value =
-        case encoding_mask do
-          0 ->
-            :not_implemented
-
-          1 ->
-            case Map.get(@data_types, node.identifier) do
-              nil ->
-                :not_implemented
-
-              data_type ->
-                {value, _} = data_type.take(data)
-                value
-            end
+        if data_type != :not_implemented do
+          {value, _} = data_type.take(data)
+          value
+        else
+          :not_implemented
         end
 
       {value, rest}
