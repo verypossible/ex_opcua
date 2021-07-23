@@ -22,32 +22,43 @@ defmodule ExOpcua do
     GenServer.call(pid, :read)
   end
 
-  def read_all_attrs(node_id, pid) do
-    # 1..27 come back in order
-    # https://reference.opcfoundation.org/v104/Core/docs/Part6/A.1/
-    GenServer.call(pid, {:read_all, node_id})
+  @spec read_all_attrs(List.t(), pid(), Atom.t()) :: map()
+  def read_all_attrs(node_ids, pid, format \\ :pretty)
 
-    # chunk_every
-    # enum with index
-    # get class by index # 0 = NodeId
-    # that determines name key
-  end
-
-  def read_values(node_ids, pid, format \\ :pretty)
-
-  def read_values([node | _rest] = nodeids, pid, format) when is_binary(node) do
+  def read_all_attrs([node | _rest] = nodeids, pid, format) when is_binary(node) do
     nodeids
     |> Enum.map(&NodeId.parse/1)
-    |> read_values(pid, format)
+    |> read_all_attrs(pid, format)
   end
 
-  def read_values(node_ids, pid, format) when is_list(node_ids) do
-    GenServer.call(pid, {:read_values, node_ids})
-    |> Read.format_output(node_ids, format)
+  def read_all_attrs(node_ids, pid, format) when is_list(node_ids) do
+    # 1..27 come back in order
+    # https://reference.opcfoundation.org/v104/Core/docs/Part6/A.1/
+    GenServer.call(pid, {:read_all, node_ids})
+    |> Read.format_output(node_ids, Read.attribute_ids(), format)
   end
 
-  def read_values(node_id, pid, format) do
-    read_values([node_id], pid, format)
-    |> Read.format_output([node_id], format)
+  def read_all_attrs(node_id, pid, format) do
+    read_all_attrs([node_id], pid, format)
+    |> Read.format_output([node_id], Read.attribute_ids(), format)
+  end
+
+  @spec read_attrs(List.t(), pid(), list(Atom.t()), Atom.t()) :: map()
+  def read_attrs(node_ids, pid, attrs \\ [:browse_name, :value], format \\ :pretty)
+
+  def read_attrs([node | _rest] = nodeids, pid, attrs, format) when is_binary(node) do
+    nodeids
+    |> Enum.map(&NodeId.parse/1)
+    |> read_attrs(pid, attrs, format)
+  end
+
+  def read_attrs(node_ids, pid, attrs, format) when is_list(node_ids) do
+    GenServer.call(pid, {:read_attrs, node_ids, attrs})
+    |> Read.format_output(node_ids, attrs, format)
+  end
+
+  def read_attrs(node_id, pid, attrs, format) do
+    read_attrs([node_id], pid, attrs, format)
+    |> Read.format_output([node_id], attrs, format)
   end
 end

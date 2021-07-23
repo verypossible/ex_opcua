@@ -3,7 +3,60 @@ defmodule ExOpcua.Services.ReadTest do
 
   alias ExOpcua.Services.Read
 
-  def test_response do
+  test "decode_response/1 decodes a read response" do
+    t = SampleData.read_response()
+    {:ok, res} = Read.decode_response(t)
+    results = res.read_results
+    assert length(results) == 10
+    assert Enum.all?(results, fn r -> r.server_timestamp != nil end)
+    assert Enum.all?(results, fn r -> r.value != nil end)
+    assert List.first(results).value.identifier == 40
+  end
+
+  test "decode_response/1 decodes an extension object" do
+    t = SampleData.read_response_with_extension()
+    {:ok, res} = Read.decode_response(t)
+    results = res.read_results
+
+    assert length(results) == 1
+    assert res.read_results |> List.first() |> Map.has_key?(:server_timestamp)
+  end
+
+  test "decode_response/1 decodes an Array of strings" do
+    t = SampleData.array_of_strings()
+    {:ok, res} = Read.decode_response(t)
+    results = res.read_results
+    assert length(results) == 1
+    arr = List.first(results).value
+    assert length(arr) == 5
+    assert "http://opcfoundation.org/UA/" in arr
+  end
+
+  test "decode_response/1 decodes an Array of bools" do
+    t = SampleData.array_of_bools()
+    {:ok, res} = Read.decode_response(t)
+    results = res.read_results
+    assert length(results) == 1
+    arr = List.first(results).value
+    assert length(arr) == 5
+    assert arr === [true, false, false, false, true]
+  end
+
+  test "encode_read/1 encodes a single final message" do
+    s = %{
+      sec_channel_id: 22,
+      token_id: 33,
+      auth_token: "auth_token",
+      seq_number: 44
+    }
+
+    encoded = Read.encode_read_attrs(["ns=3;i=1001"], [:browse_name, :value], s)
+    assert String.starts_with?(encoded, "MSGF")
+  end
+end
+
+defmodule SampleData do
+  def read_response do
     # change 0x01-0x0A to change array size
     <<0x0A, 0x00, 0x00, 0x00, 0x09, 0x11, 0x00, 0x28, 0x56, 0xF2, 0xFF, 0xA6, 0x44, 0xD5, 0xCC,
       0x01, 0x09, 0x06, 0x20, 0x00, 0x00, 0x00, 0x78, 0xF3, 0xFF, 0xA6, 0x44, 0xD5, 0xCC, 0x01,
@@ -25,7 +78,7 @@ defmodule ExOpcua.Services.ReadTest do
       0xA6, 0x44, 0xD5, 0xCC, 0x01>>
   end
 
-  def test_with_extension do
+  def read_response_with_extension do
     <<0x01, 0x00, 0x00, 0x00, 0x0D, 0x16, 0x01, 0x00, 0x60, 0x03, 0x01, 0x81, 0x00, 0x00, 0x00,
       0x60, 0x81, 0xA8, 0x22, 0x98, 0xC9, 0xCC, 0x01, 0x7A, 0x89, 0x5D, 0xA7, 0x44, 0xD5, 0xCC,
       0x01, 0x00, 0x00, 0x00, 0x00, 0x1F, 0x00, 0x00, 0x00, 0x68, 0x74, 0x74, 0x70, 0x73, 0x3A,
@@ -39,7 +92,7 @@ defmodule ExOpcua.Services.ReadTest do
       0xCC, 0x01, 0xF2, 0x89, 0x5D, 0xA7, 0x44, 0xD5, 0xCC, 0x01>>
   end
 
-  def test_data_value do
+  def data_value do
     <<0x09, 0x15, 0x02, 0x45, 0x00, 0x00, 0x00, 0x54, 0x68, 0x65, 0x20, 0x74, 0x79, 0x70, 0x65,
       0x20, 0x66, 0x6F, 0x72, 0x20, 0x72, 0x65, 0x66, 0x65, 0x72, 0x65, 0x6E, 0x63, 0x65, 0x73,
       0x20, 0x66, 0x72, 0x6F, 0x6D, 0x20, 0x61, 0x20, 0x69, 0x6E, 0x73, 0x74, 0x61, 0x6E, 0x63,
@@ -48,7 +101,7 @@ defmodule ExOpcua.Services.ReadTest do
       0x2E, 0x20, 0xF6, 0xFF, 0xA6, 0x44, 0xD5, 0xCC, 0x01>>
   end
 
-  def test_server_status do
+  def server_status do
     <<0x60, 0x81, 0xA8, 0x22, 0x98, 0xC9, 0xCC, 0x01, 0x12, 0x1F, 0x64, 0xA5, 0x44, 0xD5, 0xCC,
       0x01, 0x00, 0x00, 0x00, 0x00, 0x1F, 0x00, 0x00, 0x00, 0x68, 0x74, 0x74, 0x70, 0x73, 0x3A,
       0x2F, 0x2F, 0x77, 0x77, 0x77, 0x2E, 0x73, 0x69, 0x65, 0x6D, 0x65, 0x6E, 0x73, 0x2E, 0x63,
@@ -79,44 +132,5 @@ defmodule ExOpcua.Services.ReadTest do
 
   def array_of_bools do
     <<0x01, 0x00, 0x00, 0x00, 0x01, 0x81, 0x05, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01>>
-  end
-
-  test "decode_response/1 decodes a read response" do
-    t = test_response()
-    {:ok, res} = Read.decode_response(t)
-    results = res.read_results
-    assert length(results) == 10
-    assert Enum.all?(results, fn r -> r.server_timestamp != nil end)
-    assert Enum.all?(results, fn r -> r.value != nil end)
-    assert List.first(results).value.identifier == 40
-  end
-
-  test "decode_response/1 decodes an extension object" do
-    t = test_with_extension()
-    {:ok, res} = Read.decode_response(t)
-    results = res.read_results
-
-    assert length(results) == 1
-    assert res.read_results |> List.first() |> Map.has_key?(:server_timestamp)
-  end
-
-  test "decode_response/1 decodes an Array of strings" do
-    t = array_of_strings()
-    {:ok, res} = Read.decode_response(t)
-    results = res.read_results
-    assert length(results) == 1
-    arr = List.first(results).value
-    assert length(arr) == 5
-    assert "http://opcfoundation.org/UA/" in arr
-  end
-
-  test "decode_response/1 decodes an Array of bools" do
-    t = array_of_bools()
-    {:ok, res} = Read.decode_response(t)
-    results = res.read_results
-    assert length(results) == 1
-    arr = List.first(results).value
-    assert length(arr) == 5
-    assert arr === [true, false, false, false, true]
   end
 end

@@ -1,5 +1,4 @@
 defmodule ExOpcua.ParameterTypes.BrowseResult do
-  import ExOpcua.DataTypes.BuiltInDataTypes.Macros
   alias ExOpcua.DataTypes.BuiltInDataTypes.OpcString
   alias ExOpcua.DataTypes.Array
   alias ExOpcua.ParameterTypes.{ReferenceDescription, StatusCode}
@@ -34,9 +33,5 @@ defmodule ExOpcua.ParameterTypes.BrowseResult do
         rest
       }
     end
-  end
-
-  defp take_status_code(<<code::uint(32), rest::binary>>) do
-    {code, rest}
   end
 end

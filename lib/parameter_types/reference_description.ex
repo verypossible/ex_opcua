@@ -1,6 +1,7 @@
 defmodule ExOpcua.ParameterTypes.ReferenceDescription do
   import ExOpcua.DataTypes.BuiltInDataTypes.Macros
-  alias ExOpcua.DataTypes.{OpcBoolean, NodeId, LocalizedText}
+  alias ExOpcua.DataTypes.{NodeId}
+  alias ExOpcua.DataTypes.BuiltInDataTypes.{OpcBoolean, LocalizedText}
 
   defstruct [
     :reference_type_id,

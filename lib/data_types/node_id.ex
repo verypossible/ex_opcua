@@ -80,6 +80,7 @@ defmodule ExOpcua.DataTypes.NodeId do
     opc_null_value()
   end
 
+  @spec to_string(%__MODULE__{}) :: String.t()
   def to_string(%__MODULE__{
         encoding_mask: 0,
         namespace_idx: _namespace_idx,
@@ -94,7 +95,7 @@ defmodule ExOpcua.DataTypes.NodeId do
         identifier: identifier
       })
       when mask in [1, 2] do
-    "ns=" <> Integer.to_string(namespace_idx) <> "i=" <> Integer.to_string(identifier)
+    "ns=" <> Integer.to_string(namespace_idx) <> ";i=" <> Integer.to_string(identifier)
   end
 
   def to_string(%__MODULE__{
@@ -103,33 +104,34 @@ defmodule ExOpcua.DataTypes.NodeId do
         identifier: identifier
       })
       when mask in [3, 5] do
-    "ns=" <> Integer.to_string(namespace_idx) <> "i=" <> identifier
+    "ns=" <> Integer.to_string(namespace_idx) <> ";i=" <> identifier
   end
 
+  @spec parse(String.t()) :: %__MODULE__{}
   def parse(string) when is_binary(string) do
     string |> String.split(";") |> Enum.reduce(%__MODULE__{}, &do_parse/2)
   end
 
-  defp do_parse("ns=" <> namespace_idx, %__MODULE__{} = nodeID) do
+  defp do_parse("ns=" <> namespace_idx, %__MODULE__{} = node_id) do
     {namespace_idx, _} = Integer.parse(namespace_idx)
-    Map.put(nodeID, :namespace_idx, namespace_idx)
+    Map.put(node_id, :namespace_idx, namespace_idx)
   end
 
-  defp do_parse("i=" <> integer_identifier, %__MODULE__{} = nodeID) do
+  defp do_parse("i=" <> integer_identifier, %__MODULE__{} = node_id) do
     {identifier, _} = Integer.parse(integer_identifier)
 
-    nodeID
+    node_id
     |> Map.put(:encoding_mask, 2)
     |> Map.put(:identifier, identifier)
   end
 
-  defp do_parse("s=" <> string_identifier, %__MODULE__{} = nodeID) do
-    nodeID
+  defp do_parse("s=" <> string_identifier, %__MODULE__{} = node_id) do
+    node_id
     |> Map.put(:encoding_mask, 3)
     |> Map.put(:identifier, string_identifier)
   end
 
-  defp do_parse("g=" <> guid_identifier, %__MODULE__{} = nodeID) do
+  defp do_parse("g=" <> _guid_identifier, %__MODULE__{} = _node_id) do
     # TODO: Guids are 16 bytes, but currently there is no conversion from string representation
     raise "Guid String Parsing not yet implemented"
   end
