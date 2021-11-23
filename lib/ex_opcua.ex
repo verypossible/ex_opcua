@@ -59,6 +59,5 @@ defmodule ExOpcua do
 
   def read_attrs(node_id, pid, attrs, format) do
     read_attrs([node_id], pid, attrs, format)
-    |> Read.format_output([node_id], attrs, format)
   end
 end

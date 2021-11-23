@@ -32,8 +32,6 @@ defmodule ExOpcua.Session do
 
   @impl GenServer
   def init([ip, port, url, handler]) do
-    url = url <> "/OPCUA/SimulationServer"
-
     # initial values
     state = %Impl.State{handler: handler, url: url}
 
