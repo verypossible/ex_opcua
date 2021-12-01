@@ -1,10 +1,20 @@
 defmodule ExOpcua.Services do
   import ExOpcua.DataTypes.BuiltInDataTypes.Macros
   alias ExOpcua.DataTypes.BuiltInDataTypes
-  alias ExOpcua.Services.{ActivateSession, Browse, CreateSession, OpenSecureChannel, Read}
+
+  alias ExOpcua.Services.{
+    ActivateSession,
+    Browse,
+    CreateSession,
+    GetEndpoints,
+    OpenSecureChannel,
+    Read
+  }
+
   alias ExOpcua.ParameterTypes.StatusCode
 
   @service_ids %{
+    431 => GetEndpoints,
     449 => OpenSecureChannel,
     464 => CreateSession,
     470 => ActivateSession,

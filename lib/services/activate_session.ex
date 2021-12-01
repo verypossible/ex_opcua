@@ -65,6 +65,6 @@ defmodule ExOpcua.Services.ActivateSession do
       opc_null_value(),
       opc_null_value()
     >>
-    |> Protocol.append_message_header()
+    |> Protocol.prepend_message_header()
   end
 end

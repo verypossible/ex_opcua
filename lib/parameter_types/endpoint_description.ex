@@ -10,7 +10,7 @@ defmodule ExOpcua.ParameterTypes.EndpointDescription do
   alias ExOpcua.ParameterTypes.{ApplicationDescription, UserTokenPolicy}
 
   defstruct [
-    :endpoint_url,
+    :url,
     :server,
     :server_cert,
     :message_sec_mode,
@@ -21,7 +21,7 @@ defmodule ExOpcua.ParameterTypes.EndpointDescription do
   ]
 
   @type t :: %__MODULE__{
-          endpoint_url: String.t(),
+          url: String.t(),
           server: ApplicationDescription.t(),
           server_cert: binary(),
           message_sec_mode: atom(),
@@ -47,9 +47,21 @@ defmodule ExOpcua.ParameterTypes.EndpointDescription do
          {user_id_tokens, rest} <- Array.take(rest, &UserTokenPolicy.take/1),
          {transport_profile_uri, rest} <- OpcString.take(rest),
          <<security_level::int(8), rest::binary>> <- rest do
+      server_cert =
+        case X509.Certificate.from_der(server_cert) do
+          {:ok, parsed_server_cert} ->
+            %{
+              public_key: X509.Certificate.public_key(parsed_server_cert),
+              thumprint: :crypto.hash(:sha, server_cert)
+            }
+
+          _ ->
+            nil
+        end
+
       {
         %__MODULE__{
-          endpoint_url: endpoint_url,
+          url: endpoint_url,
           server: server,
           server_cert: server_cert,
           message_sec_mode: message_sec_mode,

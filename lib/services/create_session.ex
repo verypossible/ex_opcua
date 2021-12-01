@@ -78,7 +78,7 @@ defmodule ExOpcua.Services.CreateSession do
       300_000::little-float-size(64),
       0::int(32)
     >>
-    |> Protocol.append_message_header()
+    |> Protocol.prepend_message_header()
   end
 
   defp take_revised_timeout(<<revised_session_timeout::ldouble, rest::binary>>) do

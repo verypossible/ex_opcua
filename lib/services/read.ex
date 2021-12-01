@@ -109,7 +109,7 @@ defmodule ExOpcua.Services.Read do
       0::int(32),
       Array.serialize(read_values, &ReadValueId.serialize/1)::binary
     >>
-    |> Protocol.append_message_header()
+    |> Protocol.prepend_message_header()
   end
 
   @spec format_output(map(), list(String.t()), list(Atom.t()), Atom.t()) :: map()

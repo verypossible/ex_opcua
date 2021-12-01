@@ -19,19 +19,18 @@ defmodule ExOpcua.Services.OpenSecureChannel do
      }}
   end
 
-  def encode_command(security_policy, seq_number, req_id) do
+  def encode_command(
+        security_policy,
+        seq_number,
+        req_id,
+        sender_private_key,
+        sender_cert \\ @default_cert,
+        reciever_cert \\ @default_cert
+      ) do
+    nonce =
+      System.unique_integer([:positive]) |> Integer.to_string() |> String.pad_leading(32, "0")
+
     <<
-      # channel_id
-      0::int(32),
-      serialize_string(security_policy),
-      # sender cert
-      @default_cert,
-      # reciever cert
-      @default_cert,
-      # sequence number
-      seq_number::int(32),
-      # request id
-      req_id::int(32),
       # request message
       0x01,
       0x00,
@@ -74,19 +73,25 @@ defmodule ExOpcua.Services.OpenSecureChannel do
       0x00,
       0x00,
       0x00,
-      0x01,
+      # Security Type 3 = sign and encrypt
+      0x03,
       0x00,
       0x00,
       0x00,
-      0x00,
-      0x00,
-      0x00,
-      0x00,
+      serialize_string(nonce),
+      # requested Liftime 3_600_000
       0x80,
       0xEE,
       0x36,
       0x00
     >>
-    |> Protocol.append_message_header(:final, :open_secure_channel)
+    |> Protocol.wrap_message(
+      security_policy,
+      sender_private_key,
+      sender_cert,
+      reciever_cert,
+      seq_number,
+      req_id
+    )
   end
 end
