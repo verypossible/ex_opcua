@@ -1,13 +1,15 @@
 defmodule ExOpcua.Services.OpenSecureChannel do
   import ExOpcua.DataTypes.BuiltInDataTypes.Macros
-  alias ExOpcua.Protocol
+  alias ExOpcua.{Protocol, SecurityProfile}
   alias ExOpcua.DataTypes.BuiltInDataTypes
 
   @default_cert opc_null_value()
+  @securtiy_type_enum [invalid: 0, none: 1, sign: 2, sign_encrypt: 3]
 
   def decode_response(
         <<_server_proto_ver::int(32), sec_channel_id::int(32), token_id::int(32),
-          token_created_at::int(64), revised_lifetime_in_ms::int(32), _nonce::binary>>
+          token_created_at::int(64), revised_lifetime_in_ms::int(32), deserialize_string(nonce),
+          rest::binary>>
       ) do
     {:ok,
      %{
@@ -15,21 +17,12 @@ defmodule ExOpcua.Services.OpenSecureChannel do
        token_id: token_id,
        token_created_at: BuiltInDataTypes.Timestamp.to_datetime(token_created_at),
        revised_lifetime_in_ms: revised_lifetime_in_ms,
-       token_expire_time: DateTime.add(DateTime.utc_now(), revised_lifetime_in_ms, :millisecond)
+       token_expire_time: DateTime.add(DateTime.utc_now(), revised_lifetime_in_ms, :millisecond),
+       server_nonce: nonce
      }}
   end
 
-  def encode_command(
-        security_policy,
-        seq_number,
-        req_id,
-        sender_private_key,
-        sender_cert \\ @default_cert,
-        reciever_cert \\ @default_cert
-      ) do
-    nonce =
-      System.unique_integer([:positive]) |> Integer.to_string() |> String.pad_leading(32, "0")
-
+  def encode_command(%SecurityProfile{} = security_profile) do
     <<
       # request message
       0x01,
@@ -74,24 +67,13 @@ defmodule ExOpcua.Services.OpenSecureChannel do
       0x00,
       0x00,
       # Security Type 3 = sign and encrypt
-      0x03,
-      0x00,
-      0x00,
-      0x00,
-      serialize_string(nonce),
+      @securtiy_type_enum[security_profile.sec_mode]::int(32),
+      serialize_string(security_profile.client_nonce),
       # requested Liftime 3_600_000
       0x80,
       0xEE,
       0x36,
       0x00
     >>
-    |> Protocol.wrap_message(
-      security_policy,
-      sender_private_key,
-      sender_cert,
-      reciever_cert,
-      seq_number,
-      req_id
-    )
   end
 end

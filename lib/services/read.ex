@@ -49,25 +49,12 @@ defmodule ExOpcua.Services.Read do
   end
 
   @spec encode_read_all(list(String.t()), pid()) :: map()
-  def encode_read_all(
-        node_ids,
-        %{
-          sec_channel_id: _sec_channel_id,
-          token_id: _token_id,
-          auth_token: _auth_token,
-          seq_number: _seq_number
-        } = s
-      ) do
+  def encode_read_all(node_ids, s) do
     encode_read_attrs(node_ids, @attribute_ids, s)
   end
 
   @spec encode_read_attrs(list(String.t()), list(Atom.t()), pid()) :: map()
-  def encode_read_attrs(node_ids, attrs, %{
-        sec_channel_id: sec_channel_id,
-        token_id: token_id,
-        auth_token: auth_token,
-        seq_number: seq_number
-      })
+  def encode_read_attrs(node_ids, attrs, %{auth_token: auth_token})
       when is_list(node_ids) do
     read_values =
       node_ids
@@ -82,10 +69,6 @@ defmodule ExOpcua.Services.Read do
       end)
 
     <<
-      sec_channel_id::int(32),
-      token_id::int(32),
-      seq_number::int(32),
-      seq_number::int(32),
       0x01,
       0x00,
       631::int(16),
@@ -109,7 +92,6 @@ defmodule ExOpcua.Services.Read do
       0::int(32),
       Array.serialize(read_values, &ReadValueId.serialize/1)::binary
     >>
-    |> Protocol.prepend_message_header()
   end
 
   @spec format_output(map(), list(String.t()), list(Atom.t()), Atom.t()) :: map()

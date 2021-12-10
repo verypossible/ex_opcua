@@ -13,7 +13,7 @@ defmodule ExOpcua.Protocol do
 
   """
   import ExOpcua.DataTypes.BuiltInDataTypes.Macros
-  alias ExOpcua.DataTypes.BuiltInDataTypes
+  alias ExOpcua.DataTypes.BuiltInDataTypes.OpcString
   alias ExOpcua.DataTypes.NodeId
   alias ExOpcua.Protocol.Headers
   alias ExOpcua.Services
@@ -22,7 +22,6 @@ defmodule ExOpcua.Protocol do
   @default_cert opc_null_value()
   @frame_head_size 8
   @message_types [
-    hello: "HEL",
     open_secure_channel: "OPN",
     close_secure_channel: "CLO",
     message: "MSG"
@@ -33,37 +32,70 @@ defmodule ExOpcua.Protocol do
     final_aborted: "A"
   ]
 
-  @spec recieve_message(pid(), integer() | nil) ::
+  @spec recieve_message(ExOpcua.Session.State.t()) ::
           {:ok, %{payload: any, header: struct()}} | atom()
-  def recieve_message(socket, request_id \\ nil) do
-    socket
-    |> recieve_frame(request_id)
+  def recieve_message(session) do
+    session
+    |> recieve_frame()
     |> decode_message()
   end
 
-  @spec recieve_frame(pid(), integer() | nil, binary()) :: {struct(), binary()}
-  defp recieve_frame(socket, request_id, message_acc \\ <<>>)
+  def recieve_message(session, :debug) do
+    {head, mess} =
+      message =
+      session
+      |> recieve_frame()
 
-  defp recieve_frame(socket, request_id, message_acc) do
+    IO.inspect(Base.encode16(mess), limit: :infinity)
+
+    decode_message(message)
+  end
+
+  @spec recieve_frame(ExOpcua.Session.State.t(), binary()) :: {struct(), binary()}
+  defp recieve_frame(session, message_acc \\ <<>>)
+
+  defp recieve_frame(%{socket: socket, req_id: request_id} = session, message_acc) do
     with {:ok, <<_::bytes-size(4), msg_size::int(32)>> = frame_info} <-
            :gen_tcp.recv(socket, @frame_head_size, 10_000),
          {:ok, frame} <- :gen_tcp.recv(socket, msg_size - @frame_head_size, 2_000),
-         full_frame <- frame_info <> frame do
-      case Headers.decode_message_header(full_frame) do
-        {%{req_id: ^request_id, chunk_type: :intermediate}, rest} ->
-          recieve_frame(socket, request_id, message_acc <> rest)
+         full_frame <- frame_info <> frame,
+         {%{} = header, full_frame} <- Headers.take(full_frame) do
+      case header do
+        # hello header is never intermediate or encrypted
+        %Headers.HelloHeader{} ->
+          {header, full_frame}
 
-        {%{req_id: ^request_id, chunk_type: :final} = header, rest} ->
-          {header, message_acc <> rest}
+        # OpenSecureChannel is never intermediate and always Asymetrically Encrypted (if not none)
+        %Headers.OpenSecureChannelHeader{} ->
+          <<_seq_num::little-unsigned-integer-size(32),
+            ^request_id::little-unsigned-integer-size(32),
+            full_frame::binary>> =
+            ExOpcua.SecurityProfile.decrypt_data(full_frame, session.security_profile)
 
-        {%{chunk_type: :final} = header, rest} when is_nil(request_id) ->
-          {header, rest}
+          {header, full_frame}
 
-        {:error, reason} ->
-          reason
+        # All other messages can be partial or final, and use Symetric Encryption is not :none
+        %{chunk_type: :intermediate} ->
+          full_frame =
+            ExOpcua.SecurityProfile.sym_decrypt_data(full_frame, session.security_profile)
 
-        _ ->
-          IO.inspect(request_id)
+          <<_seq_num::little-unsigned-integer-size(32),
+            ^request_id::little-unsigned-integer-size(32),
+            full_frame::binary>> = binary_part(full_frame, 0, byte_size(full_frame) - 33)
+
+          recieve_frame(session, message_acc <> full_frame)
+
+        %{chunk_type: :final} = header ->
+          full_frame =
+            ExOpcua.SecurityProfile.sym_decrypt_data(full_frame, session.security_profile)
+
+          <<_seq_num::little-unsigned-integer-size(32),
+            ^request_id::little-unsigned-integer-size(32), full_frame::binary>> = full_frame
+
+          {header, message_acc <> full_frame}
+
+        other_output ->
+          other_output
       end
     end
   end
@@ -85,7 +117,7 @@ defmodule ExOpcua.Protocol do
 
     msg_size = 8 + byte_size(payload)
 
-    <<@message_types[:hello]::binary, @is_final[:final]::binary, msg_size::int(32)>> <> payload
+    <<"HEL"::binary, @is_final[:final]::binary, msg_size::int(32)>> <> payload
   end
 
   # @spec encode_message(atom(), [any]) :: binary() | :error
@@ -154,95 +186,100 @@ defmodule ExOpcua.Protocol do
   #   :not_implemented
   # end
 
-  @spec prepend_message_header(binary(), atom(), atom()) :: binary()
-  def prepend_message_header(payload, is_final \\ :final, message_type \\ :message)
-
-  def prepend_message_header(payload, is_final, message_type) when is_binary(payload) do
-    msg_size = @frame_head_size + byte_size(payload)
-
-    <<
-      @message_types[message_type]::binary,
-      @is_final[is_final]::binary,
-      msg_size::int(32)
-    >> <> payload
-  end
-
-  def prepend_message_header(payload, is_final, message_type) when is_binary(payload) do
-    msg_size = @frame_head_size + byte_size(payload)
-
-    <<
-      @message_types[message_type]::binary,
-      @is_final[is_final]::binary,
-      msg_size::int(32)
-    >> <> payload
-  end
-
-  def message_header(msg_size, is_final, message_type) do
-    <<
-      @message_types[message_type]::binary,
-      @is_final[is_final]::binary,
-      msg_size::int(32)
-    >>
-  end
-
-  def wrap_message(
+  def build_asymetric_packet(
         payload,
-        sec_policy,
-        sender_private_key,
-        sender_cert,
-        recv_cert,
-        seq_number,
-        req_id
+        %{
+          req_id: req_id,
+          seq_number: seq_number,
+          security_profile: sec_profile
+        } = session_info
       ) do
-    public_key =
-      {:RSAPublicKey,
-       17_613_116_168_005_741_559_508_673_914_679_911_427_152_126_075_015_720_884_747_549_322_715_312_277_771_805_797_246_804_608_358_133_295_364_536_958_573_402_497_218_733_093_038_152_155_852_039_778_223_294_464_307_773_355_937_317_681_021_460_052_294_644_640_439_570_330_219_521_047_950_558_571_564_401_119_785_350_013_899_486_602_675_276_714_539_219_702_336_473_312_348_831_077_166_603_806_121_401_989_067_184_409_819_454_792_343_971_931_110_008_813_654_511_443_863_286_262_701_178_634_311_212_942_466_996_381_029_141_413_688_861_764_289_232_673_917_446_735_068_497_836_269_568_722_076_137_198_235_518_366_416_701_366_986_863_857_930_617_424_754_275_421_711_493_983_881_680_996_508_284_001_271_531_990_280_778_716_858_554_997_441_653_730_398_211_999_069_310_113_576_894_613_285_930_509_050_283_983_314_963_045_475_957_932_709,
-       65537}
+    seq_number = seq_number + 1
+    req_id = req_id + 1
 
-    security_header = <<
-      # channel_id
-      0::int(32),
-      serialize_string(sec_policy),
-      # sender cert
-      serialize_string(sender_cert),
-      # reciever cert
-      serialize_string(recv_cert)
-    >>
+    # prepend sequence headers
+    payload = <<seq_number::int(32), req_id::int(32)>> <> payload
 
-    sequence_header = <<
-      # sequence number
-      seq_number::int(32),
-      # request id
-      req_id::int(32)
-    >>
+    security_header = ExOpcua.SecurityProfile.asymetric_security_header(sec_profile)
 
     # payload + sequence header + signature (sha256)
-    payload_bytes = byte_size(payload) + byte_size(sequence_header) + 256
+    payload_bytes = byte_size(payload) + 256
 
     # padding needed to fit perfectly into encryption chunks (214 bytes = 256bytes encrypted)
     padding_size = 214 - rem(payload_bytes + 1, 214)
 
-    padding =
-      List.duplicate(<<padding_size::int(8)>>, padding_size + 1)
-      |> Enum.join()
+    padding = to_string(:string.chars(padding_size, padding_size + 1))
 
     msg_size =
       floor(
         (payload_bytes + byte_size(padding)) / 214 * 256 + byte_size(security_header) +
-          @frame_head_size
+          @frame_head_size + 4
       )
 
     msg_header = message_header(msg_size, :final, :open_secure_channel)
 
     signature =
-      (msg_header <> security_header <> sequence_header <> payload <> padding)
-      |> :public_key.sign(:sha256, sender_private_key)
+      (msg_header <> security_header <> payload <> padding)
+      |> ExOpcua.SecurityProfile.sign(sec_profile)
 
     encrypted_payload =
-      (sequence_header <> payload <> padding <> signature)
-      |> encrypt_data(public_key)
+      (payload <> padding <> signature)
+      |> ExOpcua.SecurityProfile.encrypt_data(sec_profile)
 
-    msg_header <> security_header <> encrypted_payload
+    {%{session_info | req_id: req_id, seq_number: seq_number},
+     msg_header <> security_header <> encrypted_payload}
+  end
+
+  def build_symetric_packet(
+        payload,
+        %{
+          req_id: req_id,
+          seq_number: seq_number,
+          sec_channel_id: sec_channel_id,
+          token_id: token_id,
+          security_profile: sec_profile
+        } = session_info
+      ) do
+    seq_number = seq_number + 1
+    req_id = req_id + 1
+
+    # prepend sequence headers
+    payload = <<seq_number::int(32), req_id::int(32)>> <> payload
+
+    security_header = <<token_id::int(32)>>
+
+    # payload + sequence header + signature (sha256)
+    payload_bytes = byte_size(payload) + 256
+
+    # padding needed to fit perfectly into encryption chunks 16 byte chunks
+    padding_size = 16 - rem(payload_bytes + 1, 16)
+
+    payload = payload <> to_string(:string.chars(padding_size, padding_size + 1))
+
+    msg_size = byte_size(security_header) + byte_size(payload) + 32 + @frame_head_size + 4
+
+    msg_header = message_header(msg_size, :final, :message, sec_channel_id)
+
+    signature =
+      (msg_header <> security_header <> payload)
+      |> ExOpcua.SecurityProfile.sign(sec_profile, :sym)
+
+    encrypted_payload =
+      (payload <> signature)
+      |> ExOpcua.SecurityProfile.sym_encrypt_data(sec_profile)
+
+    {%{session_info | req_id: req_id, seq_number: seq_number},
+     msg_header <> security_header <> encrypted_payload}
+  end
+
+  def message_header(msg_size, is_final, message_type, sec_channel_id \\ 0) do
+    <<
+      @message_types[message_type]::binary,
+      @is_final[is_final]::binary,
+      msg_size::int(32),
+      # channel_id
+      sec_channel_id::int(32)
+    >>
   end
 
   @spec decode_message({struct(), binary() | <<>>} | {:error, atom()}) ::
@@ -266,43 +303,5 @@ defmodule ExOpcua.Protocol do
 
   def decode_message(other) do
     {:error, other}
-  end
-
-  def encrypt_data(data, public_key, acc \\ <<>>)
-
-  def encrypt_data(<<>>, _public_key, acc) do
-    acc
-  end
-
-  def encrypt_data(<<data_part::binary-size(214), rest::binary>>, public_key, acc) do
-    encrypt_data(
-      rest,
-      public_key,
-      acc <>
-        :public_key.encrypt_public(data_part, public_key, [{:rsa_pad, :rsa_pkcs1_oaep_padding}])
-    )
-  end
-
-  def encrypt_data(<<_data::binary>>, _public_key, _acc) do
-    raise "Data must be a multple of 214"
-  end
-
-  def decrypt_data(data, private_key, acc \\ <<>>)
-
-  def decrypt_data(<<>>, _private_key, acc) do
-    acc
-  end
-
-  def decrypt_data(<<data_part::binary-size(256), rest::binary>>, private_key, acc) do
-    decrypt_data(
-      rest,
-      private_key,
-      acc <>
-        :public_key.decrypt_private(data_part, private_key, [{:rsa_pad, :rsa_pkcs1_oaep_padding}])
-    )
-  end
-
-  def decrypt_data(<<data::binary>>, private_key, acc) do
-    acc <> :public_key.decrypt_private(data, private_key, [{:rsa_pad, :rsa_pkcs1_oaep_padding}])
   end
 end

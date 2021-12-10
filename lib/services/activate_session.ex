@@ -2,7 +2,7 @@ defmodule ExOpcua.Services.ActivateSession do
   import ExOpcua.DataTypes.BuiltInDataTypes.Macros
   alias ExOpcua.Protocol
   alias ExOpcua.DataTypes.NodeId
-  alias ExOpcua.DataTypes.BuiltInDataTypes.Timestamp
+  alias ExOpcua.DataTypes.BuiltInDataTypes.{OpcString, Timestamp}
 
   def decode_response(<<
         deserialize_string(_server_nonce),
@@ -12,18 +12,13 @@ defmodule ExOpcua.Services.ActivateSession do
     {:ok, %{activated: true}}
   end
 
-  def encode_command(%{
-        sec_channel_id: sec_channel_id,
-        token_id: token_id,
-        auth_token: auth_token,
-        req_id: req_id,
-        seq_number: seq_number
-      }) do
+  def decode_response(binary) do
+    IO.inspect(Base.encode16(binary))
+    {:ok, %{activated: true}}
+  end
+
+  def encode_command(%{auth_token: auth_token, session_signature: signature}) do
     <<
-      sec_channel_id::int(32),
-      token_id::int(32),
-      seq_number::int(32),
-      req_id::int(32),
       0x01,
       0x00,
       467::int(16),
@@ -42,8 +37,8 @@ defmodule ExOpcua.Services.ActivateSession do
       0x00,
       0x00,
       # client_signiture
-      opc_null_value(),
-      opc_null_value(),
+      OpcString.serialize("http://www.w3.org/2001/04/xmldsig-more#rsa-sha256")::binary,
+      OpcString.serialize(signature)::binary,
       # empty array of certs
       opc_null_value(),
       # array of locales
@@ -65,6 +60,6 @@ defmodule ExOpcua.Services.ActivateSession do
       opc_null_value(),
       opc_null_value()
     >>
-    |> Protocol.prepend_message_header()
+    |> IO.inspect(limit: :infinity)
   end
 end

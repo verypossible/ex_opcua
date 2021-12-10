@@ -1,7 +1,6 @@
 defmodule ExOpcua.Session do
   alias ExOpcua.Protocol.Headers
-  alias ExOpcua.Protocol
-  alias ExOpcua.Services
+  alias ExOpcua.{Protocol, SecurityProfile, Services}
   alias ExOpcua.ParameterTypes.EndpointDescription
 
   defmodule State do
@@ -18,8 +17,11 @@ defmodule ExOpcua.Session do
       :recv_cert,
       :session_expire_time,
       :auth_token,
+      :security_profile,
       req_id: 0,
-      seq_number: 0
+      seq_number: 0,
+      sec_channel_id: 0,
+      session_signature: nil
     ]
   end
 
@@ -52,20 +54,18 @@ defmodule ExOpcua.Session do
   def start_session(opts \\ []) do
     ip = opts[:ip] || "127.0.0.1"
     port = opts[:port] || 4840
-
-    %EndpointDescription{} =
-      endpoint = opts[:endpoint] || raise "Endpoint is required for session connect"
+    url = opts[:url] || "opc.tcp://#{ip}:#{port}"
 
     handler = opts[:handler] || ExOpcua.Session.Handler
-    encryption = opts[:encryption] || :none
+    %SecurityProfile{} = sec_profile = opts[:security_profile] || %SecurityProfile{}
 
     # initial values
     state = %State{
       handler: handler,
-      endpoint: endpoint,
+      security_profile: sec_profile,
       ip: ip,
       port: port,
-      url: endpoint.url
+      url: url
     }
 
     GenServer.start_link(__MODULE__.Server, state, [])
@@ -75,7 +75,7 @@ defmodule ExOpcua.Session do
     with hello_message <- Protocol.encode_hello_message(url),
          :ok <- :gen_tcp.send(socket, hello_message),
          {:ok, %{header: %Headers.HelloHeader{}}} <-
-           Protocol.recieve_message(socket) do
+           Protocol.recieve_message(state) do
       state
     else
       reason -> {:hello_error, reason}
@@ -83,65 +83,31 @@ defmodule ExOpcua.Session do
   end
 
   def create_secure_connection(
-        %State{socket: socket, req_id: req_id, seq_number: seq_number} = state
+        %State{
+          socket: socket,
+          security_profile: sec_profile
+        } = state
       ) do
-    req_id = req_id + 1
-    seq_number = seq_number + 1
-    # client_private_key = X509.PrivateKey.new_rsa(2048)
-
-    # key_usage =
-    #   X509.Certificate.Extension.key_usage([
-    #     :digitalSignature,
-    #     :keyEncipherment,
-    #     :nonRepudiation,
-    #     :dataEncipherment,
-    #     :keyCertSign
-    #   ])
-
-    # client_public_key =
-    #   client_private_key
-    #   |> X509.Certificate.self_signed("/C=US/CN=Helios", extensions: [key_usage: key_usage])
-    #   |> X509.Certificate.to_der()
-
-    # File.write!("/Users/kaleb/test_priv.pem", X509.PrivateKey.to_pem(client_private_key))
-    # File.write!("/Users/kaleb/test_cert.der", client_public_key)
-
-    client_private_key = File.read!("/Users/kaleb/test_priv.pem") |> X509.PrivateKey.from_pem!()
-    client_public_key = File.read!("/Users/kaleb/test_cert.der")
-
-    recv_cert =
-      <<91, 229, 69, 166, 39, 184, 138, 223, 99, 7, 145, 115, 112, 16, 179, 96, 51, 244, 13, 236>>
-
-    with secure_connection_request <-
-           Services.OpenSecureChannel.encode_command(
-             "http://opcfoundation.org/UA/SecurityPolicy#Basic256Sha256",
-             seq_number,
-             req_id,
-             client_private_key,
-             client_public_key,
-             recv_cert
-           ),
-         :ok <- :gen_tcp.send(socket, secure_connection_request),
+    with secure_conn_request <- Services.OpenSecureChannel.encode_command(sec_profile),
+         {state, secure_conn_request} <-
+           Protocol.build_asymetric_packet(secure_conn_request, state),
+         :ok <- :gen_tcp.send(socket, secure_conn_request),
          {:ok,
           %{
-            header: %Headers.OpenSecureChannelHeader{
-              sender_cert: scert,
-              recv_cert: rcert
-            },
+            header: %Headers.OpenSecureChannelHeader{},
             payload: %{
               sec_channel_id: sci,
               token_id: token_id,
-              revised_lifetime_in_ms: revised_lifetime_in_ms
+              revised_lifetime_in_ms: revised_lifetime_in_ms,
+              server_nonce: server_nonce
             }
-          }} <- Protocol.recieve_message(socket) do
+          }} <- Protocol.recieve_message(state),
+         sec_profile = SecurityProfile.derive_sym_keys(sec_profile, server_nonce) do
       %{
         state
-        | sec_channel_id: sci,
+        | security_profile: sec_profile,
+          sec_channel_id: sci,
           token_id: token_id,
-          req_id: req_id,
-          seq_number: seq_number,
-          sender_cert: scert,
-          recv_cert: rcert,
           session_expire_time:
             DateTime.utc_now() |> DateTime.add(revised_lifetime_in_ms, :millisecond)
       }
@@ -190,68 +156,38 @@ defmodule ExOpcua.Session do
     end
   end
 
-  def create_session(
-        %State{
-          socket: socket,
-          sec_channel_id: sec_channel_id,
-          req_id: req_id,
-          seq_number: seq_number,
-          token_id: token_id,
-          url: url
-        } = state
-      ) do
-    req_id = req_id + 1
-    seq_number = seq_number + 1
-
+  def create_session(%State{socket: sock} = state) do
     with session_request <-
-           Services.CreateSession.encode_command(%{
-             sec_channel_id: sec_channel_id,
-             token_id: token_id,
-             url: url,
-             req_id: req_id,
-             seq_number: seq_number
-           }),
-         :ok <- :gen_tcp.send(socket, session_request),
+           Services.CreateSession.encode_command(state),
+         {state, session_request} <-
+           Protocol.build_symetric_packet(session_request, state),
+         :ok <- :gen_tcp.send(sock, session_request),
          {:ok,
           %{
-            payload: %{
-              session_id: _session_id,
-              auth_token: auth_token,
-              revised_session_timeout: _revised_session_timeout
-            }
-          }} <- Protocol.recieve_message(socket, req_id) do
-      %{state | auth_token: auth_token, req_id: req_id, seq_number: seq_number}
+            payload:
+              %{
+                session_id: _session_id,
+                auth_token: auth_token,
+                server_session_signature: session_signature,
+                revised_session_timeout: _revised_session_timeout
+              } = output
+          }} <- Protocol.recieve_message(state) do
+      client_signature = SecurityProfile.sign(session_signature, state.security_profile)
+      %{state | auth_token: auth_token, session_signature: client_signature}
     else
       reason -> {:session_error, reason}
     end
   end
 
-  def activate_session(
-        %State{
-          socket: socket,
-          auth_token: auth_token,
-          sec_channel_id: sec_channel_id,
-          req_id: req_id,
-          seq_number: seq_number,
-          token_id: token_id,
-          url: _url
-        } = state
-      ) do
-    next_sequence_num = seq_number + 1
-    req_id = req_id + 1
-
+  def activate_session(%State{socket: socket} = state) do
     with session_request <-
-           Services.ActivateSession.encode_command(%{
-             sec_channel_id: sec_channel_id,
-             token_id: token_id,
-             auth_token: auth_token,
-             req_id: req_id,
-             seq_number: next_sequence_num
-           }),
+           Services.ActivateSession.encode_command(state),
+         {state, session_request} <-
+           Protocol.build_symetric_packet(session_request, state),
          :ok <- :gen_tcp.send(socket, session_request),
-         {:ok, %{payload: %{activated: true}}} <- Protocol.recieve_message(socket) do
-      IO.puts("Session Activated")
-      %{state | req_id: req_id, seq_number: next_sequence_num}
+         {:ok, %{payload: %{activated: true}} = full} <- Protocol.recieve_message(state, :debug) do
+      IO.inspect(full, limit: :infinity)
+      state
     else
       reason -> {:activate_session_error, reason}
     end
@@ -259,13 +195,11 @@ defmodule ExOpcua.Session do
 
   def check_session(
         %State{
-          seq_number: seq_number,
           session_expire_time: expire_time
         } = s
       ) do
     if DateTime.compare(DateTime.utc_now(), expire_time) == :lt do
-      next_sequence_num = seq_number + 1
-      %{s | seq_number: next_sequence_num}
+      s
     else
       s
       |> create_session()

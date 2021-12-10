@@ -60,16 +60,32 @@ defmodule ExOpcua.Session.Server do
   @impl GenServer
   def handle_call({:read_all, node_ids}, _from, %{socket: socket} = s) do
     s = Session.check_session(s)
-    :gen_tcp.send(socket, Services.Read.encode_read_all(node_ids, s))
-    {:ok, %{payload: result}} = Protocol.recieve_message(socket)
+
+    {s, req} =
+      node_ids
+      |> Services.Read.encode_read_all(s)
+      |> Protocol.build_symetric_packet(s)
+
+    :gen_tcp.send(socket, req)
+
+    {:ok, %{payload: result}} = Protocol.recieve_message(s)
+
     {:reply, result, s}
   end
 
   @impl GenServer
   def handle_call({:read_attrs, node_ids, attrs}, _from, %{socket: socket} = s) do
     s = Session.check_session(s)
-    :gen_tcp.send(socket, Services.Read.encode_read_attrs(node_ids, attrs, s))
-    {:ok, %{payload: result}} = Protocol.recieve_message(socket)
+
+    {s, req} =
+      node_ids
+      |> Services.Read.encode_read_attrs(s, attrs)
+      |> Protocol.build_symetric_packet(s)
+
+    :gen_tcp.send(socket, req)
+
+    {:ok, %{payload: result}} = Protocol.recieve_message(s)
+
     {:reply, result, s}
   end
 end

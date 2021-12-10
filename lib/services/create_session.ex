@@ -9,41 +9,26 @@ defmodule ExOpcua.Services.CreateSession do
     with {session_id, rest} <- NodeId.take(bin_response),
          {auth_token, rest} <- NodeId.take(rest),
          {revised_session_timeout, rest} <- take_revised_timeout(rest),
-         {_server_nonce, rest} <- OpcString.take(rest),
+         {server_nonce, rest} <- OpcString.take(rest),
          {server_cert, rest} <- OpcString.take(rest),
-         {endpoint_descriptions, rest} <- Array.take(rest, &EndpointDescription.take/1),
-         {server_software_certs, rest} <- Array.take(rest, &SignedSoftwareCertificate.take/1),
-         {_signature_algorithm, rest} <- OpcString.take(rest),
-         {_signature, _rest} <- OpcString.take(rest) do
+         {endpoint_descriptions, _rest} <- Array.take(rest, &EndpointDescription.take/1) do
       {
         :ok,
         %{
           session_id: session_id,
           auth_token: auth_token,
           revised_session_timeout: round(revised_session_timeout),
-          server_cert: server_cert,
+          server_session_signature: server_cert <> server_nonce,
           session_expire_time:
             DateTime.add(DateTime.utc_now(), revised_session_timeout, :millisecond),
-          endpoint_descriptions: endpoint_descriptions,
-          server_software_certs: server_software_certs
+          endpoint_descriptions: endpoint_descriptions
         }
       }
     end
   end
 
-  def encode_command(%{
-        sec_channel_id: sec_channel_id,
-        token_id: token_id,
-        req_id: req_id,
-        seq_number: seq_number,
-        url: url
-      }) do
+  def encode_command(%{url: url, security_profile: sec_profile}) do
     <<
-      sec_channel_id::int(32),
-      token_id::int(32),
-      seq_number::int(32),
-      # request_id
-      req_id::int(32),
       0x01,
       0x00,
       461::int(16),
@@ -68,17 +53,15 @@ defmodule ExOpcua.Services.CreateSession do
       serialize_string(String.replace(url, "/", ":")),
       serialize_string(url),
       # session name
-      serialize_string("Helios Session12"),
+      serialize_string("Helios Session" <> "#{System.unique_integer([:positive])}"),
       # client nonce
-      32::int(32),
-      System.unique_integer()::int(256),
+      serialize_string(:crypto.strong_rand_bytes(32)),
       # client cert
-      opc_null_value(),
+      OpcString.serialize(sec_profile.client_pub_key)::binary,
       # requested keepalive
       300_000::little-float-size(64),
       0::int(32)
     >>
-    |> Protocol.prepend_message_header()
   end
 
   defp take_revised_timeout(<<revised_session_timeout::ldouble, rest::binary>>) do
