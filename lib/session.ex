@@ -57,7 +57,7 @@ defmodule ExOpcua.Session do
     url = opts[:url] || "opc.tcp://#{ip}:#{port}"
 
     handler = opts[:handler] || ExOpcua.Session.Handler
-    %SecurityProfile{} = sec_profile = opts[:security_profile] || %SecurityProfile{}
+    %SecurityProfile{} = sec_profile = opts[:security_profile] || SecurityProfile.new()
 
     # initial values
     state = %State{
