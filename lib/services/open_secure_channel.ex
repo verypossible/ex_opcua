@@ -1,7 +1,7 @@
 defmodule ExOpcua.Services.OpenSecureChannel do
   import ExOpcua.DataTypes.BuiltInDataTypes.Macros
   alias ExOpcua.{Protocol, SecurityProfile}
-  alias ExOpcua.DataTypes.BuiltInDataTypes
+  alias ExOpcua.DataTypes.BuiltInDataTypes.{OpcString, Timestamp}
 
   @default_cert opc_null_value()
   @securtiy_type_enum [invalid: 0, none: 1, sign: 2, sign_encrypt: 3]
@@ -15,7 +15,7 @@ defmodule ExOpcua.Services.OpenSecureChannel do
      %{
        sec_channel_id: sec_channel_id,
        token_id: token_id,
-       token_created_at: BuiltInDataTypes.Timestamp.to_datetime(token_created_at),
+       token_created_at: Timestamp.to_datetime(token_created_at),
        revised_lifetime_in_ms: revised_lifetime_in_ms,
        token_expire_time: DateTime.add(DateTime.utc_now(), revised_lifetime_in_ms, :millisecond),
        server_nonce: nonce
@@ -68,7 +68,7 @@ defmodule ExOpcua.Services.OpenSecureChannel do
       0x00,
       # Security Type 3 = sign and encrypt
       @securtiy_type_enum[security_profile.sec_mode]::int(32),
-      serialize_string(security_profile.client_nonce),
+      OpcString.serialize(security_profile.client_nonce)::binary,
       # requested Liftime 3_600_000
       0x80,
       0xEE,

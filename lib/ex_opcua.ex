@@ -23,6 +23,10 @@ defmodule ExOpcua do
     GenServer.call(pid, :read)
   end
 
+  def close_session(pid) do
+    GenServer.call(pid, :close_session)
+  end
+
   @spec read_all_attrs(List.t(), pid(), Atom.t()) :: map()
   def read_all_attrs(node_ids, pid, format \\ :pretty)
 
@@ -226,5 +230,9 @@ defmodule ExOpcua do
       client_pub_cert,
       server_public_key
     )
+  end
+
+  def test_no_security() do
+    ExOpcua.SecurityProfile.new()
   end
 end

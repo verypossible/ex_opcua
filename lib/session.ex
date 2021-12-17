@@ -116,22 +116,13 @@ defmodule ExOpcua.Session do
     end
   end
 
-  def close_secure_connection(
-        %State{
-          url: url,
-          socket: socket,
-          req_id: req_id,
-          seq_number: seq_number,
-          sec_channel_id: sci,
-          token_id: token_id
-        } = state
-      ) do
-    req_id = req_id + 1
-    seq_number = seq_number + 1
+  def close_secure_connection(%State{} = state) do
+    {state, request} =
+      Services.CloseSecureChannel.encode_command()
+      |> Protocol.build_symetric_packet(state, type: :close_secure_channel)
 
-    request = Services.CloseSecureChannel.encode_command(token_id, sci, seq_number, req_id)
-    :ok = :gen_tcp.send(socket, request)
-    :ok = :gen_tcp.close(socket)
+    :ok = :gen_tcp.send(state.socket, request)
+    :ok = :gen_tcp.close(state.socket)
     reset_state(state)
   end
 
@@ -185,11 +176,25 @@ defmodule ExOpcua.Session do
          {state, session_request} <-
            Protocol.build_symetric_packet(session_request, state),
          :ok <- :gen_tcp.send(socket, session_request),
-         {:ok, %{payload: %{activated: true}} = full} <- Protocol.recieve_message(state, :debug) do
+         {:ok, %{payload: %{activated: true}} = full} <- Protocol.recieve_message(state) do
       IO.inspect(full, limit: :infinity)
       state
     else
       reason -> {:activate_session_error, reason}
+    end
+  end
+
+  def close_session(%State{socket: socket} = state) do
+    with session_request <-
+           Services.CloseSession.encode_command(state),
+         {state, session_request} <-
+           Protocol.build_symetric_packet(session_request, state),
+         :ok <- :gen_tcp.send(socket, session_request),
+         {:ok, full} <- Protocol.recieve_message(state) do
+      IO.inspect(full, limit: :infinity)
+      state
+    else
+      reason -> {:close_session_error, reason}
     end
   end
 

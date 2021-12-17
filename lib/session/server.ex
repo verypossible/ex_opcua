@@ -25,6 +25,11 @@ defmodule ExOpcua.Session.Server do
     end
   end
 
+  # def terminate(reason, state) do
+  #   IO.puts("Server Shutting Down NOW!!!")
+  #   state = Session.close_secure_connection(state)
+  # end
+
   # @impl GenServer
   # def handle_info({:tcp, _socket, _packet}, %{handler: _handler} = state) do
   #   # :ok =
@@ -87,5 +92,11 @@ defmodule ExOpcua.Session.Server do
     {:ok, %{payload: result}} = Protocol.recieve_message(s)
 
     {:reply, result, s}
+  end
+
+  @impl GenServer
+  def handle_call(:close_session, _from, s) do
+    Session.close_session(s)
+    {:reply, "session_closed", s}
   end
 end
