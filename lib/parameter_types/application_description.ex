@@ -68,8 +68,8 @@ defmodule ExOpcua.ParameterTypes.ApplicationDescription do
 
   def serialize(nil) do
     <<
-      serialize_string("urn:helios.local:OPCUA"),
-      serialize_string("urn:helios.local:OPCUA"),
+      serialize_string("urn:ex_opcua:ex_opcua"),
+      serialize_string("urn:ex_opcua:ex_opcua"),
       LocalizedText.serialize("ex_opcua")::binary,
       # application type client
       1::int(32),
