@@ -1,7 +1,6 @@
 defmodule ExOpcua.Session do
   alias ExOpcua.Protocol.Headers
   alias ExOpcua.{Protocol, SecurityProfile, Services}
-  alias ExOpcua.ParameterTypes.EndpointDescription
 
   defmodule State do
     defstruct [
@@ -11,13 +10,12 @@ defmodule ExOpcua.Session do
       :url,
       :endpoint,
       :socket,
-      :sec_channel_id,
       :token_id,
       :sender_cert,
       :recv_cert,
       :session_expire_time,
       :auth_token,
-      :security_profile,
+      security_profile: %SecurityProfile{},
       req_id: 0,
       seq_number: 0,
       sec_channel_id: 0,
@@ -127,20 +125,13 @@ defmodule ExOpcua.Session do
   end
 
   def get_endpoints(
-        %State{socket: socket, url: _url, req_id: req_id, seq_number: seq_number} = state
+        %State{socket: socket} = state
       ) do
-    req_id = req_id + 1
-    seq_number = seq_number + 1
-
-    state = %{
-      state
-      | req_id: req_id,
-        seq_number: seq_number
-    }
-
     with endpoint_request <- Services.GetEndpoints.encode_command(state),
+         {state, endpoint_request} <-
+           Protocol.build_symetric_packet(endpoint_request, state),
          :ok <- :gen_tcp.send(socket, endpoint_request),
-         {:ok, %{payload: %{endpoints: response}}} <- Protocol.recieve_message(socket, req_id) do
+         {:ok, %{payload: %{endpoints: response}}} <- Protocol.recieve_message(state) do
       {state, response}
     else
       reason -> {:get_endpoint_error, reason}
@@ -155,13 +146,12 @@ defmodule ExOpcua.Session do
          :ok <- :gen_tcp.send(sock, session_request),
          {:ok,
           %{
-            payload:
-              %{
-                session_id: _session_id,
-                auth_token: auth_token,
-                server_session_signature: session_signature,
-                revised_session_timeout: _revised_session_timeout
-              } = output
+            payload: %{
+              session_id: _session_id,
+              auth_token: auth_token,
+              server_session_signature: session_signature,
+              revised_session_timeout: _revised_session_timeout
+            }
           }} <- Protocol.recieve_message(state) do
       client_signature = SecurityProfile.sign(session_signature, state.security_profile)
       %{state | auth_token: auth_token, session_signature: client_signature}

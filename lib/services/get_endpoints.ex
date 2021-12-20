@@ -14,17 +14,9 @@ defmodule ExOpcua.Services.GetEndpoints do
   end
 
   def encode_command(%{
-        url: url,
-        sec_channel_id: sec_channel_id,
-        token_id: token_id,
-        req_id: req_id,
-        seq_number: seq_number
+        url: url
       }) do
     <<
-      sec_channel_id::int(32),
-      token_id::int(32),
-      seq_number::int(32),
-      req_id::int(32),
       0x01,
       0x00,
       428::int(16),
@@ -47,6 +39,5 @@ defmodule ExOpcua.Services.GetEndpoints do
       Array.serialize([@default_transport_proto], &OpcString.serialize/1)::binary,
       Array.serialize([@default_transport_proto], &OpcString.serialize/1)::binary
     >>
-    |> Protocol.prepend_message_header()
   end
 end
