@@ -1,6 +1,6 @@
-defmodule ExOpcua.ParameterTypes.BrowseDescription do
+defmodule ExOpcua.DataTypes.BrowseDescription do
   import ExOpcua.DataTypes.BuiltInDataTypes.Macros
-  alias ExOpcua.DataTypes.{NodeId, QualifiedName}
+  alias ExOpcua.DataTypes.NodeId
   alias ExOpcua.DataTypes.BuiltInDataTypes.OpcBoolean
 
   defstruct [
@@ -42,7 +42,7 @@ defmodule ExOpcua.ParameterTypes.BrowseDescription do
   end
 end
 
-# %ExOpcua.ParameterTypes.BrowseDescription{
+# %ExOpcua.DataTypes.BrowseDescription{
 #   node_id: %{encoding_mask: 3, namespace_idx: 3, identifier: "85/0:Simulation"},
 #   browse_direction: :forward,
 #   reference_type_id: %{encoding_mask: 0, identifier: 31},
