@@ -13,8 +13,6 @@ defmodule ExOpcua.Protocol do
 
   """
   import ExOpcua.DataTypes.BuiltInDataTypes.Macros
-  alias ExOpcua.DataTypes.BuiltInDataTypes.OpcString
-  alias ExOpcua.DataTypes.NodeId
   alias ExOpcua.Protocol.Headers
   alias ExOpcua.{SecurityProfile, Services}
 

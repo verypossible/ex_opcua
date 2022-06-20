@@ -1,53 +1,108 @@
 defmodule ExOpcua.DataTypes.NodeId do
   import ExOpcua.DataTypes.BuiltInDataTypes.Macros
-  defstruct [:encoding_mask, :namespace_idx, :identifier]
+  alias ExOpcua.DataTypes.BuiltInDataTypes.OpcString
+
+  defstruct [:encoding_mask, :namespace_idx, :identifier, :server_idx, :server_uri]
 
   @type t :: %__MODULE__{
           encoding_mask: byte(),
           namespace_idx: integer(),
-          identifier: any()
+          identifier: any(),
+          server_idx: integer(),
+          server_uri: binary()
         }
 
   @spec take(binary()) :: {%__MODULE__{}, binary()} | {nil, binary()}
   @doc """
-  	Takes in a binary that starts with a NodeID, and returns the node and remaining binary
-  	Supported NodeId Encodings are:
-    0x00 - 2 byte numeric
-    0x01 - four byte numeric
-  	0x02 - Numeric (32bit integer)
-    0x03 - string value
-  	0x04 - GUID
-  	0x05 - Opaque (bytestring of variable length)
+    Takes in a binary that starts with a NodeID, and returns the node and remaining binary
+    Encodings are split into 4bit masks
+
+    First 4 bits represents "has server index" or "has namespace uri"
+      0x4 has service_index
+      0x8 has namespace_uri
+      0xC has both
+
+    Second 4 bits represent encoding
+      0x0 - 2 byte numeric
+      0x1 - four byte numeric
+      0x2 - Numeric (32bit integer)
+      0x3 - string value
+      0x4 - GUID
+      0x5 - Opaque (bytestring of variable length)
+
   """
-  def take(<<0x00, identifier::int(8), rest::binary>>) do
-    {format_struct(0, nil, identifier), rest}
+  def take(<<has_additional::uint(4), 0::uint(4), identifier::int(8), rest::binary>>) do
+    take_additional(has_additional, 0, nil, identifier, rest)
   end
 
-  def take(<<0x01, namespace_idx::int(8), identifier::int(16), rest::binary>>) do
-    {format_struct(1, namespace_idx, identifier), rest}
+  def take(
+        <<has_additional::uint(4), 1::uint(4), namespace_idx::int(8), identifier::int(16),
+          rest::binary>>
+      ) do
+    take_additional(has_additional, 1, namespace_idx, identifier, rest)
   end
 
-  def take(<<0x02, namespace_idx::int(16), identifier::int(32), rest::binary>>) do
-    {format_struct(2, namespace_idx, identifier), rest}
+  def take(
+        <<has_additional::uint(4), 2::uint(4), namespace_idx::int(16), identifier::int(32),
+          rest::binary>>
+      ) do
+    take_additional(has_additional, 2, namespace_idx, identifier, rest)
   end
 
-  def take(<<0x04, namespace_idx::int(16), identifier::bytes-size(16), rest::binary>>) do
-    {format_struct(4, namespace_idx, identifier), rest}
+  def take(
+        <<has_additional::uint(4), 4::uint(4), namespace_idx::int(16), identifier::bytes-size(16),
+          rest::binary>>
+      ) do
+    take_additional(has_additional, 4, namespace_idx, identifier, rest)
   end
 
   # 0x03 and 0x05 Opaque and String are both bytestring style
-  def take(<<mask::int(8), namespace_idx::int(16), deserialize_string(identifier), rest::binary>>)
+  def take(
+        <<has_additional::uint(4), mask::uint(4), namespace_idx::int(16),
+          deserialize_string(identifier), rest::binary>>
+      )
       when mask in [3, 5] do
-    {format_struct(mask, namespace_idx, identifier), rest}
+    take_additional(has_additional, mask, namespace_idx, identifier, rest)
   end
 
-  def take(other_binary), do: {nil, other_binary}
+  defp take_additional(0, mask, namespace_idx, identifier, rest) do
+    {
+      %__MODULE__{
+        encoding_mask: mask,
+        namespace_idx: namespace_idx,
+        identifier: identifier
+      },
+      rest
+    }
+  end
 
-  defp format_struct(mask, namespace_idx, identifier) do
-    %__MODULE__{
-      encoding_mask: mask,
-      namespace_idx: namespace_idx,
-      identifier: identifier
+  defp take_additional(4, mask, namespace_idx, identifier, <<server_idx::uint(32), rest::binary>>) do
+    {
+      %__MODULE__{
+        encoding_mask: mask,
+        namespace_idx: namespace_idx,
+        identifier: identifier,
+        server_idx: server_idx
+      },
+      rest
+    }
+  end
+
+  defp take_additional(
+         8,
+         mask,
+         namespace_idx,
+         identifier,
+         <<deserialize_string(server_uri), rest::binary>>
+       ) do
+    {
+      %__MODULE__{
+        encoding_mask: mask,
+        namespace_idx: namespace_idx,
+        identifier: identifier,
+        server_uri: server_uri
+      },
+      rest
     }
   end
 

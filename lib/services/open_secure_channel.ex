@@ -1,15 +1,14 @@
 defmodule ExOpcua.Services.OpenSecureChannel do
   import ExOpcua.DataTypes.BuiltInDataTypes.Macros
-  alias ExOpcua.{Protocol, SecurityProfile}
+  alias ExOpcua.SecurityProfile
   alias ExOpcua.DataTypes.BuiltInDataTypes.{OpcString, Timestamp}
 
-  @default_cert opc_null_value()
   @securtiy_type_enum [invalid: 0, none: 1, sign: 2, sign_encrypt: 3]
 
   def decode_response(
         <<_server_proto_ver::int(32), sec_channel_id::int(32), token_id::int(32),
           token_created_at::int(64), revised_lifetime_in_ms::int(32), deserialize_string(nonce),
-          rest::binary>>
+          _rest::binary>>
       ) do
     {:ok,
      %{

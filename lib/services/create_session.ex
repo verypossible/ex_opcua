@@ -1,7 +1,7 @@
 defmodule ExOpcua.Services.CreateSession do
   import ExOpcua.DataTypes.BuiltInDataTypes.Macros
   alias ExOpcua.Protocol
-  alias ExOpcua.DataTypes.{Array, NodeId, SignedSoftwareCertificate}
+  alias ExOpcua.DataTypes.{Array, NodeId}
   alias ExOpcua.ParameterTypes.{ApplicationDescription, EndpointDescription}
   alias ExOpcua.DataTypes.BuiltInDataTypes.{OpcString, Timestamp}
 

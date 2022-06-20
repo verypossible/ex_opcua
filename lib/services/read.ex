@@ -1,6 +1,5 @@
 defmodule ExOpcua.Services.Read do
   import ExOpcua.DataTypes.BuiltInDataTypes.Macros
-  alias ExOpcua.Protocol
   alias ExOpcua.DataTypes.{Array, BuiltInDataTypes, NodeId}
   alias ExOpcua.ParameterTypes.{DataValue, ReadValueId}
 

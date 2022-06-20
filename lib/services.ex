@@ -11,7 +11,7 @@ defmodule ExOpcua.Services do
     Read
   }
 
-  alias ExOpcua.ParameterTypes.StatusCode
+  alias ExOpcua.DataTypes.StatusCode
 
   @service_ids %{
     431 => GetEndpoints,
@@ -46,7 +46,7 @@ defmodule ExOpcua.Services do
           _string_table_size::int(32),
           _additional_header::bytes-size(3),
           rest::binary
-        >> = payload,
+        >>,
         nil,
         %{}
       ) do

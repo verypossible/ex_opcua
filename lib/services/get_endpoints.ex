@@ -1,8 +1,7 @@
 defmodule ExOpcua.Services.GetEndpoints do
   import ExOpcua.DataTypes.BuiltInDataTypes.Macros
-  alias ExOpcua.Protocol
-  alias ExOpcua.DataTypes.{Array, NodeId}
-  alias ExOpcua.ParameterTypes.EndpointDescription
+  alias ExOpcua.DataTypes.Array
+  alias ExOpcua.DataTypes.EndpointDescription
   alias ExOpcua.DataTypes.BuiltInDataTypes.{OpcString, Timestamp}
 
   @default_transport_proto "http://opcfoundation.org/UA-Profile/Transport/uatcp-uasc-uabinary"

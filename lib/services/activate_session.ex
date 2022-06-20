@@ -1,6 +1,5 @@
 defmodule ExOpcua.Services.ActivateSession do
   import ExOpcua.DataTypes.BuiltInDataTypes.Macros
-  alias ExOpcua.Protocol
   alias ExOpcua.DataTypes.NodeId
   alias ExOpcua.DataTypes.BuiltInDataTypes.{OpcString, Timestamp}
 
@@ -12,8 +11,7 @@ defmodule ExOpcua.Services.ActivateSession do
     {:ok, %{activated: true}}
   end
 
-  def decode_response(binary) do
-    IO.inspect(Base.encode16(binary))
+  def decode_response(_binary) do
     {:ok, %{activated: true}}
   end
 

@@ -1,4 +1,4 @@
-defmodule ExOpcua.ParameterTypes.BrowseResult do
+defmodule ExOpcua.DataTypes.BrowseResult do
   alias ExOpcua.DataTypes.BuiltInDataTypes.OpcString
   alias ExOpcua.DataTypes.Array
   alias ExOpcua.ParameterTypes.{ReferenceDescription, StatusCode}

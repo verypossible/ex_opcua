@@ -1,6 +1,6 @@
 defmodule ExOpcua.ParameterTypes.ReferenceDescription do
   import ExOpcua.DataTypes.BuiltInDataTypes.Macros
-  alias ExOpcua.DataTypes.{NodeId}
+  alias ExOpcua.DataTypes.{NodeId, QualifiedName}
   alias ExOpcua.DataTypes.BuiltInDataTypes.{OpcBoolean, LocalizedText}
 
   defstruct [
@@ -43,7 +43,7 @@ defmodule ExOpcua.ParameterTypes.ReferenceDescription do
     with {ref_type_id, rest} <- NodeId.take(binary),
          {is_forward, rest} <- OpcBoolean.take(rest),
          {node_id, rest} <- NodeId.take(rest),
-         {browse_name, rest} <- take_qualified_name(rest),
+         {browse_name, rest} <- QualifiedName.take(rest),
          {display_name, rest} <- LocalizedText.take(rest),
          {node_class, rest} <- take_node_class(rest),
          {type_definition, rest} <- NodeId.take(rest) do
@@ -60,14 +60,6 @@ defmodule ExOpcua.ParameterTypes.ReferenceDescription do
         rest
       }
     end
-  end
-
-  defp take_qualified_name(<<opc_null_value(), rest::binary>>) do
-    {nil, rest}
-  end
-
-  defp take_qualified_name(<<id::int(16), deserialize_string(name), rest::binary>>) do
-    {%{id: id, name: name}, rest}
   end
 
   defp take_node_class(<<0::uint(32), rest::binary>>), do: {:object, rest}

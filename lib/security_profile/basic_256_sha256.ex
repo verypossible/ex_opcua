@@ -1,6 +1,5 @@
 defmodule ExOpcua.SecurityProfile.Encryption.Basic256Sha256 do
   use ExOpcua.SecurityProfile.Encryption
-  import ExOpcua.DataTypes.BuiltInDataTypes.Macros
 
   @policy_uri "http://opcfoundation.org/UA/SecurityPolicy#Basic256Sha256"
 
