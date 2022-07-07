@@ -1,7 +1,6 @@
 defmodule ExOpcua.DataTypes.BrowseResult do
   alias ExOpcua.DataTypes.BuiltInDataTypes.OpcString
-  alias ExOpcua.DataTypes.Array
-  alias ExOpcua.ParameterTypes.{ReferenceDescription, StatusCode}
+  alias ExOpcua.DataTypes.{Array, ReferenceDescription, StatusCode}
 
   defstruct [
     :status_code,

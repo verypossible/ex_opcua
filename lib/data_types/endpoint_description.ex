@@ -1,4 +1,4 @@
-defmodule ExOpcua.ParameterTypes.EndpointDescription do
+defmodule ExOpcua.DataTypes.EndpointDescription do
   @moduledoc """
   	Defines the structure template and decodings/encodings for
   	the OPCUA Endpoint Description Parameter Type

@@ -58,6 +58,5 @@ defmodule ExOpcua.Services.ActivateSession do
       opc_null_value(),
       opc_null_value()
     >>
-    |> IO.inspect(limit: :infinity)
   end
 end

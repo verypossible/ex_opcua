@@ -5,11 +5,11 @@ defmodule ExOpcua.DataTypes.BrowseDescription do
 
   defstruct [
     :node_id,
-    :browse_direction,
-    :reference_type_id,
-    :include_subtypes,
-    :node_class_mask,
-    :result_mask
+    browse_direction: :forward,
+    reference_type_id: %NodeId{encoding_mask: 0, identifier: 35},
+    include_subtypes: true,
+    node_class_mask: 0,
+    result_mask: 31
   ]
 
   @browse_direction [:forward, :inverse, :both, :invalid]
@@ -33,7 +33,7 @@ defmodule ExOpcua.DataTypes.BrowseDescription do
       }) do
     <<
       NodeId.serialize(node_id)::binary,
-      Enum.find_index(@browse_direction, &match?(b_dir, &1))::int(32),
+      Enum.find_index(@browse_direction, &match?(&1, b_dir))::int(32),
       NodeId.serialize(ref_type)::binary,
       OpcBoolean.serialize(inc_subtypes)::binary,
       node_class::uint(32),

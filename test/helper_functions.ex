@@ -80,9 +80,9 @@ defmodule ExOpcua.Test.HelperFunctions do
     ExOpcua.SecurityProfile.new(
       :sign_encrypt,
       :basic256_Sha256,
+      server_public_key,
       client_private_key,
-      client_pub_cert,
-      server_public_key
+      client_pub_cert
     )
   end
 end

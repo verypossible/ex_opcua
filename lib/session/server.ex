@@ -84,7 +84,24 @@ defmodule ExOpcua.Session.Server do
 
     {s, req} =
       node_ids
-      |> Services.Read.encode_read_attrs(s, attrs)
+      |> Services.Read.encode_read_attrs(attrs, s)
+      |> Protocol.build_symetric_packet(s)
+
+    :gen_tcp.send(socket, req)
+
+    {:ok, %{payload: result}} = Protocol.recieve_message(s)
+
+    {:reply, result, s}
+  end
+
+  @impl GenServer
+  def handle_call({:browse, node_id, opts}, _from, %{socket: socket} = s) do
+    b_desc = struct(ExOpcua.DataTypes.BrowseDescription, [node_id: node_id] ++ opts)
+    s = Session.check_session(s)
+
+    {s, req} =
+      b_desc
+      |> Services.Browse.encode_command(s)
       |> Protocol.build_symetric_packet(s)
 
     :gen_tcp.send(socket, req)

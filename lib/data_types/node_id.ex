@@ -2,15 +2,26 @@ defmodule ExOpcua.DataTypes.NodeId do
   import ExOpcua.DataTypes.BuiltInDataTypes.Macros
   alias ExOpcua.DataTypes.BuiltInDataTypes.OpcString
 
-  defstruct [:encoding_mask, :namespace_idx, :identifier, :server_idx, :server_uri]
+  # Default is NODEID_UA_ROOT
+  defstruct [
+    :server_idx,
+    :server_uri,
+    encoding_mask: 2,
+    namespace_idx: 0,
+    identifier: 84
+  ]
 
   @type t :: %__MODULE__{
-          encoding_mask: byte(),
+          encoding_mask: integer(),
           namespace_idx: integer(),
           identifier: any(),
           server_idx: integer(),
           server_uri: binary()
         }
+
+  @default_objects_dir "ns=0;i=85"
+
+  def objects_dir(), do: @default_objects_dir
 
   @spec take(binary()) :: {%__MODULE__{}, binary()} | {nil, binary()}
   @doc """
@@ -131,36 +142,61 @@ defmodule ExOpcua.DataTypes.NodeId do
     <<mask::int(8), idx::int(16), serialize_string(id)>>
   end
 
+  def serialize(node_id) when is_binary(node_id) do
+    node_id
+    |> parse()
+    |> serialize()
+  end
+
   def serialize(_) do
     opc_null_value()
   end
 
   @spec to_string(%__MODULE__{}) :: String.t()
-  def to_string(%__MODULE__{
-        encoding_mask: 0,
-        namespace_idx: _namespace_idx,
-        identifier: identifier
-      }) do
-    "i=" <> Integer.to_string(identifier)
+  def to_string(
+        %__MODULE__{
+          encoding_mask: 0,
+          namespace_idx: _namespace_idx,
+          identifier: identifier
+        } = n_id
+      ) do
+    ("i=" <> Integer.to_string(identifier))
+    |> has_additional_to_string(n_id)
   end
 
-  def to_string(%__MODULE__{
-        encoding_mask: mask,
-        namespace_idx: namespace_idx,
-        identifier: identifier
-      })
+  def to_string(
+        %__MODULE__{
+          encoding_mask: mask,
+          namespace_idx: namespace_idx,
+          identifier: identifier
+        } = n_id
+      )
       when mask in [1, 2] do
-    "ns=" <> Integer.to_string(namespace_idx) <> ";i=" <> Integer.to_string(identifier)
+    ("ns=" <> Integer.to_string(namespace_idx) <> ";i=" <> Integer.to_string(identifier))
+    |> has_additional_to_string(n_id)
   end
 
-  def to_string(%__MODULE__{
-        encoding_mask: mask,
-        namespace_idx: namespace_idx,
-        identifier: identifier
-      })
+  def to_string(
+        %__MODULE__{
+          encoding_mask: mask,
+          namespace_idx: namespace_idx,
+          identifier: identifier
+        } = n_id
+      )
       when mask in [3, 5] do
-    "ns=" <> Integer.to_string(namespace_idx) <> ";i=" <> identifier
+    ("ns=" <> Integer.to_string(namespace_idx) <> ";i=" <> identifier)
+    |> has_additional_to_string(n_id)
   end
+
+  defp has_additional_to_string(curr_string, %__MODULE__{server_uri: nil}) do
+    curr_string
+  end
+
+  # defp has_additional_to_string(curr_string, %__MODULE__{
+  #        server_idx: nil
+  #        server_uri: uri
+  #      }) do
+  # end
 
   @spec parse(String.t()) :: %__MODULE__{}
   def parse(string) when is_binary(string) do

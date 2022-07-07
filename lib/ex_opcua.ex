@@ -9,7 +9,8 @@ defmodule ExOpcua do
   alias ExOpcua.Session
   alias ExOpcua.Services.Read
   alias ExOpcua.DataTypes.NodeId
-  alias ExOpcua.ParameterTypes.EndpointDescription
+  alias ExOpcua.DataTypes.EndpointDescription
+  import ExOpcua.Protocol.RootNamespaceNodeIDMappings
 
   def start_session(opts \\ []) do
     Session.start_session(opts)
@@ -65,8 +66,24 @@ defmodule ExOpcua do
     read_attrs([node_id], pid, attrs, format)
   end
 
+  def browse(node_id, pid, opts \\ []) do
+    GenServer.call(pid, {:browse, node_id, opts})
+  end
+
   @spec discover_endpoints(binary(), integer(), binary()) :: [%EndpointDescription{}]
-  def discover_endpoints(ip, port \\ 4840, url \\ nil) when is_binary(ip) do
+  def discover_endpoints(url) when is_binary(url) do
+    %{host: host, port: port} = URI.parse(url)
+
+    {:ok, {octet_1, octet_2, octet_3, octet_4}} =
+      host
+      |> String.to_charlist()
+      |> :inet.getaddr(:inet)
+
+    port = port || 4840
+    discover_endpoints("#{octet_1}.#{octet_2}.#{octet_3}.#{octet_4}", port, url)
+  end
+
+  def discover_endpoints(ip, port, url \\ nil) do
     url = url || "opc.tcp://" <> ip <> ":" <> "#{port}"
     # initial values
     state = %Session.State{url: url, ip: ip, port: port}
@@ -86,4 +103,71 @@ defmodule ExOpcua do
       endpoints
     end
   end
+
+  def setup_session() do
+    e =
+      ExOpcua.discover_endpoints(
+        "opc.tcp://Kalebs-MacBook-Pro.local:53530/OPCUA/SimulationServer"
+      )
+      |> Enum.find(
+        &match?(%{sec_policy_uri: "http://opcfoundation.org/UA/SecurityPolicy#None"}, &1)
+      )
+
+    {:ok, pid} = ExOpcua.start_session(e)
+
+    b = %ExOpcua.DataTypes.BrowseDescription{
+      browse_direction: :forward,
+      include_subtypes: true,
+      node_class_mask: 0,
+      node_id: %ExOpcua.DataTypes.NodeId{
+        encoding_mask: 1,
+        identifier: 23470,
+        namespace_idx: 0,
+        server_idx: nil,
+        server_uri: nil
+      },
+      reference_type_id: %{encoding_mask: 0, identifier: 35},
+      result_mask: 31
+    }
+
+    {e, pid, b}
+  end
+
+  def try_recursive(pid, node_id \\ "ns=0;i=84", variables \\ []) do
+    node_id
+    |> ExOpcua.browse(pid)
+    |> Map.get(:browse_results)
+    |> List.first()
+    |> Map.get(:references)
+    |> Enum.reduce(variables, &recursive_browse(&1, &2, pid))
+  end
+
+  def recursive_browse(
+        %{
+          node_class: :object,
+          node_id: n_id,
+          reference_type_id: %ExOpcua.DataTypes.NodeId{identifier: ua_ns0id_ORGANIZES()}
+        },
+        vars,
+        pid
+      ) do
+    n_id
+    |> ExOpcua.browse(pid)
+    |> Map.get(:browse_results)
+    |> List.first()
+    |> Map.get(:references)
+    |> Enum.reduce(vars, &recursive_browse(&1, &2, pid))
+  end
+
+  def recursive_browse(
+        %{browse_name: name, node_class: :variable, node_id: n_id},
+        vars,
+        _pid
+      ) do
+    [{name, n_id} | vars]
+  end
+
+  def recursive_browse(_, vars, _), do: vars
 end
+
+# ExOpcua.discover_endpoints("opc.tcp://Kalebs-MacBook-Pro.local:53530/OPCUA/SimulationServer") |> Enum.find(&match?(%{sec_policy_uri: "http://opcfoundation.org/UA/SecurityPolicy#None"}, &1))

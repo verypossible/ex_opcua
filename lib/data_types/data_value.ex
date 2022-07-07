@@ -1,6 +1,6 @@
-defmodule ExOpcua.ParameterTypes.DataValue do
+defmodule ExOpcua.DataTypes.DataValue do
   import ExOpcua.DataTypes.BuiltInDataTypes.Macros
-  alias ExOpcua.ParameterTypes.StatusCode
+  alias ExOpcua.DataTypes.StatusCode
   alias ExOpcua.DataTypes
   alias ExOpcua.DataTypes.BuiltInDataTypes.Timestamp
 

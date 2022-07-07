@@ -1,7 +1,7 @@
 defmodule ExOpcua.Services.Read do
   import ExOpcua.DataTypes.BuiltInDataTypes.Macros
-  alias ExOpcua.DataTypes.{Array, BuiltInDataTypes, NodeId}
-  alias ExOpcua.ParameterTypes.{DataValue, ReadValueId}
+  alias ExOpcua.DataTypes.{Array, BuiltInDataTypes, DataValue, NodeId}
+  alias ExOpcua.ParameterTypes.ReadValueId
 
   @attribute_ids [
     :node_id,

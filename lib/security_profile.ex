@@ -7,6 +7,11 @@ defmodule ExOpcua.SecurityProfile do
     basic256_Sha256: Encryption.Basic256Sha256
   }
 
+  @sec_profile_uris %{
+    "http://opcfoundation.org/UA/SecurityPolicy#None" => :none,
+    "http://opcfoundation.org/UA/SecurityPolicy#Basic256Sha256" => :basic256_Sha256
+  }
+
   defstruct sec_mode: :none,
             encrypt_mod: Encryption.None,
             client_priv_key: nil,
@@ -43,8 +48,14 @@ defmodule ExOpcua.SecurityProfile do
           }
         }
 
-  @spec new(atom(), atom(), client_key_der :: binary(), client_cert_der :: binary()) ::
-          __MODULE__.t() | {:error, binary()}
+  @spec new(
+          atom(),
+          atom(),
+          server_pub_key_der :: binary(),
+          client_key_der :: binary(),
+          client_cert_der :: binary()
+        ) ::
+          {:ok, __MODULE__.t()} | {:error, binary()}
   def new(
         sec_mode \\ :none,
         sec_profile \\ :none,
@@ -53,10 +64,10 @@ defmodule ExOpcua.SecurityProfile do
         server_public_key \\ nil
       )
 
-  def new(:none, _, _, _, _), do: %__MODULE__{}
-  def new(_, :none, _, _, _), do: %__MODULE__{}
+  def new(:none, _, _, _, _), do: {:ok, %__MODULE__{}}
+  def new(_, :none, _, _, _), do: {:ok, %__MODULE__{}}
 
-  def new(:sign_encrypt, sec_profile, client_key_der, client_cert_der, server_pub_key_der)
+  def new(:sign_encrypt, sec_profile, server_pub_key_der, client_key_der, client_cert_der)
       when is_map_key(@supported_profiles, sec_profile) do
     client_priv_key = X509.PrivateKey.from_der!(client_key_der)
 
@@ -65,19 +76,24 @@ defmodule ExOpcua.SecurityProfile do
       |> X509.Certificate.from_der!()
       |> X509.Certificate.public_key()
 
-    %__MODULE__{
-      sec_mode: :sign_encrypt,
-      encrypt_mod: Map.get(@supported_profiles, sec_profile),
-      client_priv_key: client_priv_key,
-      client_pub_key: client_cert_der,
-      server_pub_key: server_pub_key,
-      server_thumbprint: :crypto.hash(:sha, server_pub_key_der),
-      client_nonce: :crypto.strong_rand_bytes(32)
-    }
+    {:ok,
+     %__MODULE__{
+       sec_mode: :sign_encrypt,
+       encrypt_mod: Map.get(@supported_profiles, sec_profile),
+       client_priv_key: client_priv_key,
+       client_pub_key: client_cert_der,
+       server_pub_key: server_pub_key,
+       server_thumbprint: :crypto.hash(:sha, server_pub_key_der),
+       client_nonce: :crypto.strong_rand_bytes(32)
+     }}
   end
 
   def new(sec_mode, sec_profile, _, _, _) do
     {:error, "#{inspect(sec_profile)} not supported by #{inspect(sec_mode)}"}
+  end
+
+  def decode_sec_policy_uri(sec_policy_uri) do
+    Map.get(@sec_profile_uris, sec_policy_uri, :none)
   end
 
   @spec asymetric_security_header(__MODULE__.t()) :: binary()

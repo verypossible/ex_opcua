@@ -106,7 +106,6 @@ defmodule ExOpcua.Protocol.Headers do
   end
 
   def take(output) do
-    IO.inspect(Base.encode16(output))
     {:error, :invalid_header}
   end
 end

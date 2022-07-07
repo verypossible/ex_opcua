@@ -1,4 +1,4 @@
-defmodule ExOpcua.ParameterTypes.StatusCode do
+defmodule ExOpcua.DataTypes.StatusCode do
   import ExOpcua.DataTypes.BuiltInDataTypes.Macros
   defstruct [:code, :severity, :sub_code, :structure_changed, :semantics_changed]
 

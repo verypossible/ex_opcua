@@ -1,4 +1,4 @@
-defmodule ExOpcua.ParameterTypes.ReferenceDescription do
+defmodule ExOpcua.DataTypes.ReferenceDescription do
   import ExOpcua.DataTypes.BuiltInDataTypes.Macros
   alias ExOpcua.DataTypes.{NodeId, QualifiedName}
   alias ExOpcua.DataTypes.BuiltInDataTypes.{OpcBoolean, LocalizedText}
@@ -23,16 +23,16 @@ defmodule ExOpcua.ParameterTypes.ReferenceDescription do
           type_definition: NodeId.t()
         }
 
-  @node_classes [
-    :object,
-    :variable,
-    :method,
-    :object_type,
-    :variable_type,
-    :reference_type,
-    :data_type,
-    :view
-  ]
+  @node_classes %{
+    1 => :object,
+    2 => :variable,
+    4 => :method,
+    8 => :object_type,
+    16 => :variable_type,
+    32 => :reference_type,
+    64 => :data_type,
+    128 => :view
+  }
 
   @doc """
     Takes in a binary beginning with a Reference Type
@@ -62,14 +62,7 @@ defmodule ExOpcua.ParameterTypes.ReferenceDescription do
     end
   end
 
-  defp take_node_class(<<0::uint(32), rest::binary>>), do: {:object, rest}
-
   defp take_node_class(<<class::uint(32), rest::binary>>) do
-    class =
-      class
-      |> :math.log2()
-      |> round()
-
-    {Enum.at(@node_classes, class), rest}
+    {Map.get(@node_classes, class, :unspecified), rest}
   end
 end

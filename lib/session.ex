@@ -1,6 +1,7 @@
 defmodule ExOpcua.Session do
   alias ExOpcua.Protocol.Headers
   alias ExOpcua.{Protocol, SecurityProfile, Services}
+  alias ExOpcua.DataTypes.EndpointDescription
 
   defmodule State do
     defstruct [
@@ -48,6 +49,41 @@ defmodule ExOpcua.Session do
       {:ok, #PID<0,0,0>}
 
   """
+
+  def start_session(
+        %EndpointDescription{
+          url: url,
+          message_sec_mode: sec_mode,
+          server_cert: server_cert,
+          sec_policy_uri: sec_policy_uri
+        } = endpoint
+      ) do
+    %{host: host, port: port} = URI.parse(url)
+
+    {:ok, {octet_1, octet_2, octet_3, octet_4}} =
+      host
+      |> String.to_charlist()
+      |> :inet.getaddr(:inet)
+
+    ip = "#{octet_1}.#{octet_2}.#{octet_3}.#{octet_4}"
+    port = port || 4840
+    sec_policy = SecurityProfile.decode_sec_policy_uri(sec_policy_uri)
+
+    handler = ExOpcua.Session.Handler
+
+    {:ok, sec_profile} = SecurityProfile.new(sec_mode, sec_policy, server_cert)
+
+    # initial values
+    state = %State{
+      handler: handler,
+      security_profile: sec_profile,
+      ip: ip,
+      port: port,
+      url: url
+    }
+
+    GenServer.start_link(__MODULE__.Server, state, [])
+  end
 
   def start_session(opts \\ []) do
     ip = opts[:ip] || "127.0.0.1"
@@ -124,9 +160,7 @@ defmodule ExOpcua.Session do
     reset_state(state)
   end
 
-  def get_endpoints(
-        %State{socket: socket} = state
-      ) do
+  def get_endpoints(%State{socket: socket} = state) do
     with endpoint_request <- Services.GetEndpoints.encode_command(state),
          {state, endpoint_request} <-
            Protocol.build_symetric_packet(endpoint_request, state),
